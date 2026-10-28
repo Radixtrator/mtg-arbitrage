@@ -87,24 +87,27 @@ On a server, the app re-downloads prices every day at `MTG_REFRESH_HOUR` UTC (de
 | `MTG_PASSWORD` | *(none)* | Turns on basic auth, with any username and this password. Set it whenever the app is reachable from outside. |
 | `MTG_HOST` / `MTG_PORT` | `0.0.0.0` / `8765` in Docker | Address and port to listen on |
 | `MTG_REFRESH_HOUR` | `10` | UTC hour for the daily refresh (`-1` turns it off) |
+| `PUID` / `PGID` | `99` / `100` | Owner of the files in the volumes (Unraid's `nobody:users`) |
 
-**On Unraid:**
-1. Copy this folder to the server, for example to `/mnt/user/appdata/mtg-arbitrage/src`, with `git clone` or over the SMB share.
-   - Optionally copy your existing `data/` folder to `/mnt/user/appdata/mtg-arbitrage/data` to keep your buy list and price history.
-2. In the Unraid terminal, create the storage folders and give them to Unraid's default user:
+Every push to `main` builds `ghcr.io/radixtrator/mtg-arbitrage:latest` with GitHub Actions, for amd64 and arm64.
+
+**On Unraid (web UI, no terminal):**
+1. Install the template, once: in the Unraid terminal run
    ```bash
-   mkdir -p /mnt/user/appdata/mtg-arbitrage/{cache,data} && chown -R 99:100 /mnt/user/appdata/mtg-arbitrage
+   wget -O /boot/config/plugins/dockerMan/templates-user/my-mtg-arbitrage.xml https://raw.githubusercontent.com/Radixtrator/mtg-arbitrage/main/unraid/mtg-arbitrage.xml
    ```
-3. Set a real `MTG_PASSWORD` in `docker-compose.yml`, then start it:
-   ```bash
-   cd /mnt/user/appdata/mtg-arbitrage/src && docker compose up -d --build
-   ```
-   The Compose Manager plugin from Community Apps can run the same file from the web UI.
-   - The first start downloads about 320 MB of price data, which takes a minute or two.
-   - After changing the code, run `docker compose up -d --build` again.
-4. Point a subdomain at it through your reverse proxy (Nginx Proxy Manager, SWAG, Traefik or a Cloudflare Tunnel).
-   - Proxy `mtg.yourdomain.com` to `http://<unraid-ip>:8765` and turn on HTTPS. Basic auth is only safe over HTTPS.
-   - If the proxy already handles login (Authelia, Authentik or Cloudflare Access), you can remove `MTG_PASSWORD`.
+   Alternatively, skip this step and fill in the fields below by hand under **Add Container**.
+2. **Docker → Add Container → Template:** pick `mtg-arbitrage`. Set a **Password**, then click **Apply**.
+   - It stores data in `/mnt/user/appdata/mtg-arbitrage/` (`cache` and `data`). Those folders are created and owned by `nobody:users` automatically.
+   - To keep your buy list and price history, copy your local `data/` folder into `appdata/mtg-arbitrage/data` before the first start.
+   - The first start downloads about 350 MB of price data, which takes a minute or two. Then click the container icon → **WebUI**.
+3. **Updates:** after a push, wait about 3 minutes for the build. The Docker tab then shows *update ready*; click **Apply update**. To update automatically, use the *Auto Update Applications* plugin from Community Apps.
+
+**With Docker Compose instead:** `docker-compose.yml` uses the same image. Set `MTG_PASSWORD` in it, then run `docker compose up -d` (or `docker compose pull && docker compose up -d` to update). To build from a checkout, swap `image:` for `build: .`.
+
+**On your domain:** proxy `mtg.yourdomain.com` to `http://<unraid-ip>:8765` with HTTPS (Nginx Proxy Manager, SWAG, Traefik or a Cloudflare Tunnel).
+- Basic auth is only safe over HTTPS.
+- If the proxy already handles login (Authelia, Authentik or Cloudflare Access), you can leave `MTG_PASSWORD` empty. Either way, keep some login in front of it: Cardmarket's terms don't allow showing their prices publicly.
 
 ## Project layout
 ```

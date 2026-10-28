@@ -1,0 +1,21 @@
+<?xml version="1.0"?>
+<Container version="2">
+  <Name>mtg-arbitrage</Name>
+  <Repository>ghcr.io/radixtrator/mtg-arbitrage:latest</Repository>
+  <Registry>https://github.com/Radixtrator/mtg-arbitrage/pkgs/container/mtg-arbitrage</Registry>
+  <Network>bridge</Network>
+  <Shell>bash</Shell>
+  <Privileged>false</Privileged>
+  <Support>https://github.com/Radixtrator/mtg-arbitrage/issues</Support>
+  <Project>https://github.com/Radixtrator/mtg-arbitrage</Project>
+  <Overview>Finds Magic: The Gathering cards that are cheap on Cardmarket (EU) and sell for more in the US (TCGplayer, Mana Pool, Card Kingdom buylist). Prices refresh daily. Personal use: keep it behind the password.</Overview>
+  <Category>Tools:</Category>
+  <WebUI>http://[IP]:[PORT:8765]/</WebUI>
+  <Config Name="Web UI port" Target="8765" Default="8765" Mode="tcp" Description="Port for the web UI" Type="Port" Display="always" Required="true" Mask="false">8765</Config>
+  <Config Name="Password" Target="MTG_PASSWORD" Default="" Description="Login password (any username). Required if the app is reachable from outside your network." Type="Variable" Display="always" Required="true" Mask="true"></Config>
+  <Config Name="Daily refresh hour (UTC)" Target="MTG_REFRESH_HOUR" Default="10" Description="UTC hour when prices are re-downloaded every day; -1 disables" Type="Variable" Display="advanced" Required="false" Mask="false">10</Config>
+  <Config Name="PUID" Target="PUID" Default="99" Description="User id that owns the appdata files (99 = nobody)" Type="Variable" Display="advanced" Required="false" Mask="false">99</Config>
+  <Config Name="PGID" Target="PGID" Default="100" Description="Group id that owns the appdata files (100 = users)" Type="Variable" Display="advanced" Required="false" Mask="false">100</Config>
+  <Config Name="Price cache" Target="/app/.cache" Default="/mnt/user/appdata/mtg-arbitrage/cache" Mode="rw" Description="Downloaded price data (~350 MB, re-downloaded daily)" Type="Path" Display="advanced" Required="true" Mask="false">/mnt/user/appdata/mtg-arbitrage/cache</Config>
+  <Config Name="User data" Target="/app/data" Default="/mnt/user/appdata/mtg-arbitrage/data" Mode="rw" Description="Buy list and price history" Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/mtg-arbitrage/data</Config>
+</Container>

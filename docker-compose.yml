@@ -1,15 +1,16 @@
 services:
   mtg-arbitrage:
-    build: .
-    image: mtg-arbitrage
+    image: ghcr.io/radixtrator/mtg-arbitrage:latest   # built by GitHub Actions on every push
+    # build: .                                        # or build from this checkout instead
     container_name: mtg-arbitrage
     restart: unless-stopped
-    user: "99:100"            # Unraid's nobody:users, so appdata files stay editable from shares
     ports:
       - "8765:8765"
     environment:
       MTG_PASSWORD: "change-me"   # basic-auth password (any username); remove only if your proxy handles auth
       MTG_REFRESH_HOUR: "10"      # UTC hour for the daily price re-download
+      PUID: "99"                  # files in appdata are owned by this user:group (Unraid's nobody:users)
+      PGID: "100"
     volumes:
       - /mnt/user/appdata/mtg-arbitrage/cache:/app/.cache
       - /mnt/user/appdata/mtg-arbitrage/data:/app/data
