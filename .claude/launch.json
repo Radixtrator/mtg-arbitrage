@@ -1,0 +1,7 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    { "name": "mtg-arb", "runtimeExecutable": "python3", "runtimeArgs": ["app.py"], "port": 8765 },
+    { "name": "mtg-arb-alt", "runtimeExecutable": "python3", "runtimeArgs": ["app.py", "--port", "8766"], "port": 8766 }
+  ]
+}

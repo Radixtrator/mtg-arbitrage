@@ -1,0 +1,667 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MTG Arbitrage</title>
+<style>
+:root {
+  --bg: #f5f4f0; --panel: #ffffff; --panel-2: #efede7; --text: #1d1c1a; --muted: #6b6860;
+  --border: #dcd9d0; --accent: #2f6fde; --pos: #1a7f4b; --neg: #c0392b; --warn: #b7791f; --chip: #e7e4dc;
+  --shadow: 0 1px 2px rgba(0,0,0,.06), 0 4px 16px rgba(0,0,0,.06);
+  --c-cm: #2f6fde; --c-tcg: #d9480f; --c-mp: #7048e8; --c-ck: #0c8599;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #131416; --panel: #1c1d21; --panel-2: #24262b; --text: #ebe9e4; --muted: #9a978f;
+    --border: #2f3137; --accent: #6b9cff; --pos: #4cc38a; --neg: #ff7a6b; --warn: #f0b429; --chip: #2a2c32;
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 4px 16px rgba(0,0,0,.3);
+    --c-cm: #6b9cff; --c-tcg: #ff8a4c; --c-mp: #a98bff; --c-ck: #3bc9db;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; }
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+button, input, select, textarea { font: inherit; color: inherit; }
+[hidden] { display: none !important; }
+.layout { display: grid; grid-template-columns: 290px 1fr; min-height: 100vh; }
+aside { background: var(--panel); border-right: 1px solid var(--border); padding: 16px; position: sticky; top: 0; height: 100vh; overflow-y: auto; }
+aside h1 { font-size: 17px; margin: 0 0 2px; }
+aside .sub { color: var(--muted); font-size: 12px; margin-bottom: 14px; }
+fieldset { border: 0; padding: 0; margin: 0 0 14px; }
+legend, .lbl { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin-bottom: 6px; padding: 0; }
+.row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+label.f { display: block; font-size: 12px; color: var(--muted); }
+label.f input, label.f select { display: block; width: 100%; margin-top: 3px; }
+input[type=number], input[type=text], input[type=search], input[type=date], select, textarea {
+  background: var(--panel-2); border: 1px solid var(--border); border-radius: 7px; padding: 6px 8px; outline: none; }
+input:focus, select:focus, textarea:focus { border-color: var(--accent); }
+.checks { display: flex; flex-wrap: wrap; gap: 6px; }
+.checks label { display: inline-flex; align-items: center; gap: 4px; background: var(--chip); border-radius: 999px; padding: 3px 10px 3px 6px; font-size: 12px; cursor: pointer; user-select: none; }
+.chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+.chip { background: var(--chip); border-radius: 999px; padding: 2px 8px; font-size: 12px; display: inline-flex; gap: 4px; align-items: center; }
+.chip button { border: 0; background: none; cursor: pointer; color: var(--muted); padding: 0; }
+details { border-top: 1px solid var(--border); padding-top: 10px; margin-bottom: 12px; }
+summary { cursor: pointer; font-weight: 600; font-size: 13px; margin-bottom: 8px; }
+.btn { background: var(--panel-2); border: 1px solid var(--border); border-radius: 7px; padding: 6px 12px; cursor: pointer; display: inline-block; }
+.btn:hover { border-color: var(--accent); text-decoration: none; }
+.btn:disabled { opacity: .5; cursor: default; }
+.btn.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+.btn.sm { padding: 2px 8px; font-size: 12px; }
+.btn-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.seg { display: inline-flex; border: 1px solid var(--border); border-radius: 7px; overflow: hidden; }
+.seg button { border: 0; background: var(--panel); padding: 6px 10px; cursor: pointer; font-size: 13px; }
+.seg button + button { border-left: 1px solid var(--border); }
+.seg button.on { background: var(--accent); color: #fff; }
+.seg.full { display: flex; width: 100%; }
+.seg.full button { flex: 1; padding: 6px 4px; }
+.seg.grid2 { display: grid; grid-template-columns: 1fr 1fr; width: 100%; }
+.seg.grid2 button { padding: 6px 4px; border-left: 0; }
+.seg.grid2 button:nth-child(even) { border-left: 1px solid var(--border); }
+.seg.grid2 button:nth-child(n+3) { border-top: 1px solid var(--border); }
+
+main { padding: 0 20px 40px; min-width: 0; }
+nav.tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--border); margin: 0 -20px 14px; padding: 0 20px; position: sticky; top: 0; background: var(--bg); z-index: 5; overflow-x: auto; }
+nav.tabs button { border: 0; background: none; padding: 12px 14px 10px; cursor: pointer; color: var(--muted); border-bottom: 2px solid transparent; white-space: nowrap; font-weight: 550; }
+nav.tabs button.on { color: var(--text); border-bottom-color: var(--accent); }
+nav.tabs .count { background: var(--chip); border-radius: 999px; padding: 0 6px; font-size: 11px; margin-left: 4px; }
+.toolbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 14px; }
+.toolbar .grow { flex: 1; }
+.stats { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
+.stat { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 8px 14px; min-width: 120px; }
+.stat .v { font-size: 18px; font-weight: 650; font-variant-numeric: tabular-nums; }
+.stat .k { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+.panel { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 14px; }
+
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 14px; }
+.card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; box-shadow: var(--shadow); cursor: pointer; display: flex; flex-direction: column; transition: transform .12s; }
+.card:hover { transform: translateY(-2px); }
+.imgwrap { position: relative; aspect-ratio: 488/680; background: var(--panel-2); }
+.imgwrap img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.imgwrap.foil::after { content: ""; position: absolute; inset: 0; pointer-events: none; mix-blend-mode: overlay;
+  background: linear-gradient(115deg, transparent 20%, rgba(255,0,180,.25) 35%, rgba(0,220,255,.3) 50%, rgba(255,255,0,.25) 65%, transparent 80%); background-size: 250% 250%; animation: foil 5s linear infinite; }
+@keyframes foil { from { background-position: 0% 0%; } to { background-position: 250% 250%; } }
+.badges { position: absolute; top: 8px; left: 8px; display: flex; gap: 4px; flex-wrap: wrap; }
+.badge { background: rgba(0,0,0,.72); color: #fff; font-size: 11px; padding: 2px 7px; border-radius: 999px; }
+.actions { position: absolute; top: 6px; right: 6px; display: flex; flex-direction: column; gap: 4px; }
+.act { background: rgba(0,0,0,.6); color: #fff; border: 0; border-radius: 999px; width: 30px; height: 30px; cursor: pointer; font-size: 15px; line-height: 1; }
+.act.on { color: #ffcc33; }
+.body { padding: 8px 10px 10px; }
+.name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.meta { color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.prices { display: flex; justify-content: space-between; margin-top: 6px; font-variant-numeric: tabular-nums; font-size: 12.5px; gap: 4px; }
+.prices .via { font-weight: 650; text-decoration: underline; text-decoration-thickness: 2px; text-underline-offset: 3px; }
+.profit { display: flex; justify-content: space-between; margin-top: 4px; font-weight: 650; color: var(--pos); font-variant-numeric: tabular-nums; }
+.cm { color: var(--c-cm); } .tcg { color: var(--c-tcg); } .mp { color: var(--c-mp); } .ck { color: var(--c-ck); }
+.prices { flex-wrap: wrap; }
+
+table.t { width: 100%; border-collapse: collapse; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+table.t th, table.t td { padding: 6px 10px; text-align: left; border-bottom: 1px solid var(--border); white-space: nowrap; }
+table.t th { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); background: var(--panel-2); }
+table.t th[data-sort] { cursor: pointer; }
+table.t td.n, table.t th.n { text-align: right; font-variant-numeric: tabular-nums; }
+table.t tbody tr[data-i] { cursor: pointer; }
+table.t tbody tr:hover { background: var(--panel-2); }
+td img.thumb { width: 34px; border-radius: 3px; vertical-align: middle; }
+.tablewrap { overflow-x: auto; }
+.pos { color: var(--pos); } .neg { color: var(--neg); } .warn { color: var(--warn); } .muted { color: var(--muted); }
+#hover { position: fixed; pointer-events: none; width: 250px; border-radius: 12px; box-shadow: var(--shadow); display: none; z-index: 20; }
+
+.more { display: flex; justify-content: center; margin-top: 18px; }
+.empty { color: var(--muted); padding: 40px; text-align: center; }
+
+.drawer-bg { position: fixed; inset: 0; background: rgba(0,0,0,.45); display: none; z-index: 30; }
+.drawer { position: fixed; top: 0; right: 0; height: 100vh; width: min(560px, 100vw); background: var(--panel); z-index: 31; transform: translateX(100%); transition: transform .2s; overflow-y: auto; padding: 18px; box-shadow: var(--shadow); }
+.drawer.open { transform: none; }
+.drawer-bg.open { display: block; }
+.drawer h2 { margin: 0 0 2px; font-size: 20px; }
+.drawer h3 { font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 18px 0 8px; }
+.kv { display: grid; grid-template-columns: 1fr auto auto; gap: 4px 14px; font-variant-numeric: tabular-nums; margin: 12px 0; }
+.kv .h { font-size: 11px; color: var(--muted); text-transform: uppercase; }
+.oracle { white-space: pre-wrap; background: var(--panel-2); border-radius: 8px; padding: 10px; font-size: 13px; }
+.close { float: right; }
+.note { font-size: 12px; color: var(--muted); }
+.toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: var(--text); color: var(--bg); padding: 8px 16px; border-radius: 8px; z-index: 50; box-shadow: var(--shadow); font-size: 13px; }
+.toggle-filters { display: none; }
+
+@media (max-width: 820px) {
+  .layout { grid-template-columns: 1fr; }
+  aside { position: static; height: auto; border-right: 0; border-bottom: 1px solid var(--border); display: none; }
+  aside.show { display: block; }
+  .toggle-filters { display: inline-block; }
+  main { padding: 0 16px 40px; }
+  nav.tabs { margin: 0 -16px 12px; padding: 0 16px; }
+  .grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+}
+</style>
+</head>
+<body>
+<div class="layout">
+  <aside id="sidebar">
+    <h1>MTG Arbitrage</h1>
+    <div class="sub">Buy on Cardmarket, sell in the US</div>
+
+    <fieldset>
+      <label class="f">Card name<input type="search" id="q" placeholder="e.g. Force of Will"></label>
+    </fieldset>
+
+    <fieldset>
+      <legend>Sell on</legend>
+      <div class="seg grid2" id="storefront">
+        <button data-v="tcgplayer" class="on">TCGplayer</button>
+        <button data-v="manapool">Mana Pool</button>
+        <button data-v="cardkingdom" title="Sell to Card Kingdom's buylist: a guaranteed offer, no fees">CK buylist</button>
+        <button data-v="best" title="Whichever nets more per card">Best</button>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Value as</legend>
+      <div class="seg full" id="sellMode">
+        <button data-v="fees" class="on" title="Sale price minus storefront fees">After fees</button>
+        <button data-v="market" title="Raw market price, no fees">Market</button>
+        <button data-v="credit" title="Trade in to a US store for credit">Store credit</button>
+      </div>
+      <div class="row2" id="creditWrap" style="margin-top:8px">
+        <label class="f ckhide">Store credit, % of market<input type="number" id="credit_pct" step="5" min="0"></label>
+        <label class="f ckonly" title="Card Kingdom pays this much more if you take store credit instead of cash">CK credit bonus %<input type="number" id="ck_credit_bonus" step="5" min="0"></label>
+      </div>
+      <p class="note ckonly" style="margin:6px 0 0">Card Kingdom's buylist price is a firm cash offer with no fees, so Market and After fees give the same result for it.</p>
+      <div class="row2" id="feesWrap" style="margin-top:8px">
+        <label class="f">Sell at % of mkt<input type="number" id="sell_at" step="1"></label>
+        <span></span>
+        <label class="f tcgfee">TCG fee %<input type="number" id="tcg_fee" step="0.25"></label>
+        <label class="f tcgfee">TCG fixed $<input type="number" id="tcg_fixed" step="0.05"></label>
+        <label class="f mpfee">Mana Pool fee %<input type="number" id="mp_fee" step="0.5"></label>
+        <label class="f mpfee">MP fee cap $<input type="number" id="mp_fee_cap" step="5"></label>
+        <label class="f mpfee">MP processing %<input type="number" id="mp_processing" step="0.1"></label>
+        <label class="f mpfee">MP fixed $<input type="number" id="mp_fixed" step="0.05"></label>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Finish</legend>
+      <div class="checks" id="finishes">
+        <label><input type="checkbox" value="nonfoil" checked>Non-foil</label>
+        <label><input type="checkbox" value="foil" checked>Foil</label>
+        <label><input type="checkbox" value="etched" checked>Etched</label>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Rarity</legend>
+      <div class="checks" id="rarities">
+        <label><input type="checkbox" value="common">Common</label>
+        <label><input type="checkbox" value="uncommon">Uncommon</label>
+        <label><input type="checkbox" value="rare">Rare</label>
+        <label><input type="checkbox" value="mythic">Mythic</label>
+        <label><input type="checkbox" value="special">Special</label>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Sets</legend>
+      <input type="text" id="setInput" list="setList" placeholder="Type set name or code" style="width:100%">
+      <datalist id="setList"></datalist>
+      <div class="chips" id="setChips"></div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Price &amp; profit</legend>
+      <div class="row2">
+        <label class="f">Min US $<input type="number" id="min_usd" step="1" min="0"></label>
+        <label class="f">Max US $<input type="number" id="max_usd" step="1" min="0" placeholder="none"></label>
+        <label class="f">Min profit $<input type="number" id="min_profit" step="0.5"></label>
+        <label class="f">Min ROI %<input type="number" id="min_roi" step="5"></label>
+      </div>
+      <label class="f" style="margin-top:8px">Max price ratio (drops bad data)<input type="number" id="max_ratio" step="0.5" min="1"></label>
+    </fieldset>
+
+    <fieldset>
+      <legend>Liquidity &amp; demand</legend>
+      <div class="row2">
+        <label class="f" title="Copies currently listed on Mana Pool, all finishes">Min MP listings<input type="number" id="min_mp_qty" step="1" min="0" placeholder="any"></label>
+        <label class="f" title="EDHREC popularity rank; lower = more played">EDHREC rank ≤<input type="number" id="max_edhrec" step="500" min="1" placeholder="any"></label>
+      </div>
+      <label class="f" style="margin-top:8px" title="Drop cards whose TCGplayer and Mana Pool prices differ by more than this factor — a sign one of them is stale or thin">Max TCG vs MP disagreement ×<input type="number" id="max_disagree" step="0.1" min="1" placeholder="any (e.g. 1.5)"></label>
+    </fieldset>
+
+    <details>
+      <summary>Buying costs</summary>
+      <div class="row2">
+        <label class="f">EUR → USD<input type="number" id="fx" step="0.001"></label>
+        <label class="f">Buy above trend %<input type="number" id="buy_markup" step="1"></label>
+        <label class="f">Per-card cost $<input type="number" id="per_card_cost" step="0.05"></label>
+        <label class="f">Import duty %<input type="number" id="duty" step="1"></label>
+      </div>
+      <p class="note">Per-card cost covers Cardmarket shipping to Germany split across cards, plus your shipping to the US buyer.</p>
+    </details>
+
+    <div class="btn-row">
+      <button class="btn" id="reset">Reset filters</button>
+      <button class="btn" id="refresh" title="Re-download today's Scryfall and Mana Pool prices">Refresh data</button>
+    </div>
+    <div id="sidebarExtra"></div>
+    <p class="note" id="dataInfo"></p>
+  </aside>
+
+  <main>
+    <nav class="tabs" id="tabs">
+      <button class="toggle-filters" id="toggleFilters">☰ Filters</button>
+      <button data-tab="scanner" class="on">Scanner</button>
+    </nav>
+
+    <section data-panel="scanner">
+      <div class="toolbar">
+        <label class="f" style="display:flex;align-items:center;gap:6px">Sort
+          <select id="sort">
+            <option value="profit">Profit $</option>
+            <option value="roi">ROI %</option>
+            <option value="ratio">Price ratio</option>
+            <option value="sell">US price</option>
+            <option value="cm">Cardmarket price</option>
+            <option value="name">Name</option>
+          </select>
+        </label>
+        <span class="grow"></span>
+        <div class="seg" id="view">
+          <button data-v="grid" class="on">Grid</button>
+          <button data-v="table">Table</button>
+        </div>
+      </div>
+
+      <div class="stats">
+        <div class="stat"><div class="v" id="sTotal">–</div><div class="k">Opportunities</div></div>
+        <div class="stat"><div class="v" id="sCost">–</div><div class="k">Cost to buy 1 of each</div></div>
+        <div class="stat"><div class="v pos" id="sProfit">–</div><div class="k" id="profitLbl">Profit if all sell</div></div>
+        <div class="stat"><div class="v" id="sFx">–</div><div class="k">EUR → USD</div></div>
+      </div>
+
+      <div id="results"></div>
+      <div class="more"><button class="btn" id="more" hidden>Load more</button></div>
+    </section>
+  </main>
+</div>
+
+<img id="hover" alt="">
+<div class="drawer-bg" id="drawerBg"></div>
+<div class="drawer" id="drawer"></div>
+
+<script>
+const $ = s => document.querySelector(s);
+const NUM = ["min_usd","max_usd","min_profit","min_roi","max_ratio","min_mp_qty","max_edhrec","max_disagree","fx","buy_markup",
+             "per_card_cost","duty","sell_at","tcg_fee","tcg_fixed","mp_fee","mp_fee_cap","mp_processing","mp_fixed","credit_pct","ck_credit_bonus"];
+const PAGE = 120;
+const STORE_LABEL = {tcgplayer: "TCGplayer", manapool: "Mana Pool", cardkingdom: "Card Kingdom", offer: "Offered price"};
+const store = {
+  get(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch { return d; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
+};
+let meta, defaults, rows = [], total = 0, offset = 0, view = store.get("view", "grid");
+let sets = [], storefront = "tcgplayer", sellMode = "fees";
+const fmt = (sym, v) => v == null ? "–" : sym + Number(v).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+const usd = v => fmt("$", v), eur = v => fmt("€", v);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const rowKey = r => `${r.id}:${r.finish}`;
+
+// ---- Scryfall API queue: Scryfall asks for <= 10 requests/sec ----
+const sfQueue = []; let sfBusy = false;
+function scryfall(url, opts) {
+  return new Promise((resolve, reject) => { sfQueue.push({url, opts, resolve, reject}); pump(); });
+}
+async function pump() {
+  if (sfBusy || !sfQueue.length) return;
+  sfBusy = true;
+  const {url, opts, resolve, reject} = sfQueue.shift();
+  try {
+    const r = await fetch(url, {...opts, headers: {Accept: "application/json", ...(opts?.headers || {})}});
+    resolve(await r.json());
+  } catch (e) { reject(e); }
+  setTimeout(() => { sfBusy = false; pump(); }, 110);
+}
+async function api(path, opts = {}) {
+  const init = {...opts};
+  if (opts.body !== undefined && typeof opts.body !== "string") {
+    init.body = JSON.stringify(opts.body); init.headers = {"Content-Type": "application/json", ...(opts.headers || {})};
+  }
+  const r = await fetch(path, init);
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(data.error || r.statusText);
+  return data;
+}
+function toast(msg, ms = 2200) {
+  const t = document.createElement("div"); t.className = "toast"; t.textContent = msg;
+  document.body.appendChild(t); setTimeout(() => t.remove(), ms);
+}
+
+// ---- plugin registry (used by ui/features/*.js) ----
+const listeners = {}, cardActions = [], drawerSections = [];
+const TAB_ORDER = ["scanner", "buylist", "planner", "listcheck", "trends"];
+function emit(ev, data) { (listeners[ev] || []).forEach(fn => { try { fn(data); } catch (e) { console.error(e); } }); }
+function addTab({id, label, render, onShow}) {
+  const b = document.createElement("button");
+  b.dataset.tab = id; b.innerHTML = `${esc(label)}<span class="count" hidden></span>`;
+  // Keep a stable order no matter which feature script loads first; unknown tabs go last.
+  const rank = t => { const i = TAB_ORDER.indexOf(t); return i < 0 ? 99 : i; };
+  const next = [...$("#tabs").querySelectorAll("[data-tab]")].find(x => rank(x.dataset.tab) > rank(id));
+  $("#tabs").insertBefore(b, next || null);
+  const sec = document.createElement("section");
+  sec.dataset.panel = id; sec.hidden = true;
+  document.querySelector("main").appendChild(sec);
+  sec._onShow = onShow;
+  if (render) render(sec);
+  return {el: sec, setCount(n) { const c = b.querySelector(".count"); c.hidden = !n; c.textContent = n; }};
+}
+function showTab(id) {
+  document.querySelectorAll("#tabs [data-tab]").forEach(b => b.classList.toggle("on", b.dataset.tab === id));
+  document.querySelectorAll("main > section").forEach(s => {
+    s.hidden = s.dataset.panel !== id;
+    if (!s.hidden && s._onShow) s._onShow(s);
+  });
+  store.set("tab", id);
+}
+$("#tabs").addEventListener("click", e => { const b = e.target.closest("[data-tab]"); if (b) showTab(b.dataset.tab); });
+
+window.MTG = {
+  $, esc, usd, eur, store, api, scryfall, toast, rowKey,
+  get meta() { return meta; }, get rows() { return rows; }, get total() { return total; },
+  readFilters, scan: () => load(true), rerender: () => render(),
+  openDrawer, closeDrawer: () => closeDrawer(), showTab, addTab,
+  /** action: {id, icon, title, isActive(row)->bool, onClick(row)} -- small buttons on every result */
+  addCardAction(a) { cardActions.push(a); render(); },
+  /** fn(row, el): fill `el` (appended to the card drawer) each time a card opens */
+  addDrawerSection(fn) { drawerSections.push(fn); },
+  addSidebarSection(el) { $("#sidebarExtra").appendChild(el); },
+  /** events: "meta" (meta), "results" ({rows,total}), "filters" (params) */
+  on(ev, fn) { (listeners[ev] ||= []).push(fn); },
+  /** net USD from selling one copy at `price` on `store` under the current filters */
+  netSale(price, storeName, p = readFilters()) {
+    const n = k => parseFloat(p[k]) || 0;
+    if (storeName === "cardkingdom") return p.sell_mode === "credit" ? price * (1 + n("ck_credit_bonus") / 100) : price;
+    if (p.sell_mode === "market") return price;
+    if (p.sell_mode === "credit") return price * n("credit_pct") / 100;
+    const sale = price * n("sell_at") / 100;
+    if (storeName === "manapool") return sale - Math.min(sale * n("mp_fee") / 100, n("mp_fee_cap")) - sale * n("mp_processing") / 100 - n("mp_fixed");
+    return sale * (1 - n("tcg_fee") / 100) - n("tcg_fixed");
+  },
+  /** landed USD cost of buying one copy at `eurPrice` on Cardmarket */
+  landedCost(eurPrice, p = readFilters()) {
+    const n = k => parseFloat(p[k]) || 0;
+    return eurPrice * n("fx") * (1 + n("buy_markup") / 100) * (1 + n("duty") / 100) + n("per_card_cost");
+  },
+};
+
+// ---- filters ----
+function readFilters() {
+  const p = {};
+  for (const k of NUM) p[k] = $("#" + k).value;
+  p.q = $("#q").value;
+  p.sort = $("#sort").value;
+  p.finishes = [...document.querySelectorAll("#finishes input:checked")].map(i => i.value).join(",");
+  p.rarities = [...document.querySelectorAll("#rarities input:checked")].map(i => i.value).join(",");
+  p.sets = sets.join(",");
+  p.storefront = storefront;
+  p.sell_mode = sellMode;
+  return p;
+}
+function writeFilters(p) {
+  for (const k of NUM) $("#" + k).value = p[k] ?? "";
+  $("#q").value = p.q || "";
+  $("#sort").value = p.sort || "profit";
+  const fin = (p.finishes || "").split(","), rar = (p.rarities || "").split(",");
+  document.querySelectorAll("#finishes input").forEach(i => i.checked = fin.includes(i.value));
+  document.querySelectorAll("#rarities input").forEach(i => i.checked = rar.includes(i.value));
+  sets = (p.sets || "").split(",").filter(Boolean);
+  renderSetChips();
+  storefront = p.storefront || "tcgplayer"; sellMode = p.sell_mode || "fees";
+  syncSegs();
+}
+function defaultFilters() {
+  const p = {};
+  for (const k of NUM) p[k] = k === "fx" ? meta.fx : (defaults[k] ?? "");
+  p.finishes = defaults.finishes.join(","); p.rarities = ""; p.sets = ""; p.q = ""; p.sort = "profit";
+  p.storefront = defaults.storefront; p.sell_mode = defaults.sell_mode;
+  return p;
+}
+function syncSegs() {
+  document.querySelectorAll("#storefront button").forEach(b => b.classList.toggle("on", b.dataset.v === storefront));
+  document.querySelectorAll("#sellMode button").forEach(b => b.classList.toggle("on", b.dataset.v === sellMode));
+  $("#creditWrap").hidden = sellMode !== "credit";
+  $("#feesWrap").hidden = sellMode !== "fees";
+  document.querySelectorAll(".tcgfee").forEach(el => el.hidden = !["tcgplayer", "best"].includes(storefront));
+  document.querySelectorAll(".mpfee").forEach(el => el.hidden = !["manapool", "best"].includes(storefront));
+  document.querySelectorAll(".ckonly").forEach(el => el.hidden = !["cardkingdom", "best"].includes(storefront));
+  document.querySelectorAll(".ckhide").forEach(el => el.hidden = storefront === "cardkingdom");
+  $("#feesWrap").hidden = sellMode !== "fees" || storefront === "cardkingdom";
+  $("#profitLbl").textContent = {fees: "Profit if all sell", market: "Gain at market value", credit: "Credit gain if all traded"}[sellMode];
+}
+$("#storefront").addEventListener("click", e => { const v = e.target.dataset.v; if (v) { storefront = v; syncSegs(); search(); } });
+$("#sellMode").addEventListener("click", e => { const v = e.target.dataset.v; if (v) { sellMode = v; syncSegs(); search(); } });
+
+function renderSetChips() {
+  $("#setChips").innerHTML = sets.map(s =>
+    `<span class="chip">${esc(s)}<button data-s="${esc(s)}" aria-label="Remove ${esc(s)}">✕</button></span>`).join("");
+}
+$("#setChips").addEventListener("click", e => {
+  const s = e.target.dataset.s; if (!s) return;
+  sets = sets.filter(x => x !== s); renderSetChips(); search();
+});
+$("#setInput").addEventListener("change", e => {
+  const v = e.target.value.trim(); if (!v) return;
+  const m = meta.sets.find(s => s.code === v.toUpperCase() || s.name.toLowerCase() === v.toLowerCase()
+                                || `${s.name} (${s.code})`.toLowerCase() === v.toLowerCase());
+  if (m && !sets.includes(m.code)) { sets.push(m.code); renderSetChips(); search(); }
+  e.target.value = "";
+});
+
+// ---- search ----
+let timer, seq = 0;
+function search() { clearTimeout(timer); timer = setTimeout(() => load(true), 250); }
+async function load(fresh) {
+  const p = readFilters();
+  store.set("filters", p);
+  emit("filters", p);
+  if (fresh) { offset = 0; rows = []; }
+  const qs = new URLSearchParams({...p, offset, limit: PAGE});
+  const my = ++seq;
+  let res;
+  try { res = await api("/api/scan?" + qs); }
+  catch (e) { $("#results").innerHTML = `<div class="empty">${esc(e.message)}</div>`; return; }
+  if (my !== seq) return;
+  rows = rows.concat(res.rows); total = res.total; offset = rows.length;
+  $("#sTotal").textContent = total.toLocaleString();
+  $("#sCost").textContent = usd(res.total_cost);
+  $("#sProfit").textContent = usd(res.total_profit);
+  $("#sFx").textContent = Number(res.fx).toFixed(4);
+  render();
+  emit("results", {rows, total});
+}
+
+function priceLine(r) {
+  const v = s => r.sold_on === s ? " via" : "";
+  return `<span class="cm">CM ${eur(r.cardmarket_eur)}</span>
+    ${r.tcgplayer_usd != null ? `<span class="tcg${v("tcgplayer")}">TCG ${usd(r.tcgplayer_usd)}</span>` : ""}
+    ${r.manapool_usd != null ? `<span class="mp${v("manapool")}">MP ${usd(r.manapool_usd)}</span>` : ""}
+    ${r.cardkingdom_buy_usd != null ? `<span class="ck${v("cardkingdom")}" title="Card Kingdom buylist (cash)">CK ${usd(r.cardkingdom_buy_usd)}</span>` : ""}`;
+}
+function actionButtons(r, i) {
+  return cardActions.map((a, j) => {
+    const on = a.isActive ? a.isActive(r) : false;
+    return `<button class="act ${on ? "on" : ""}" data-act="${j}" data-row="${i}" title="${esc(typeof a.title === "function" ? a.title(r) : a.title)}">${esc(typeof a.icon === "function" ? a.icon(r) : a.icon)}</button>`;
+  }).join("");
+}
+
+function render() {
+  const el = $("#results");
+  $("#more").hidden = rows.length >= total;
+  if (!rows.length) { el.innerHTML = `<div class="empty">${meta ? "No cards match these filters." : "Loading…"}</div>`; return; }
+  if (view === "grid") {
+    el.innerHTML = `<div class="grid">${rows.map((r, i) => `
+      <div class="card" data-i="${i}">
+        <div class="imgwrap ${r.finish !== "nonfoil" ? "foil" : ""}">
+          ${r.image_normal ? `<img loading="lazy" src="${esc(r.image_normal)}" alt="${esc(r.name)}">` : ""}
+          <div class="badges">
+            ${r.finish !== "nonfoil" ? `<span class="badge">${r.finish}</span>` : ""}
+            ${r.reserved ? `<span class="badge" title="Reserved List">RL</span>` : ""}
+            ${r.us_disagree > 1.5 ? `<span class="badge" title="TCGplayer and Mana Pool prices disagree by ${r.us_disagree}× — check before buying">⚠ ${r.us_disagree}×</span>` : ""}
+          </div>
+          <div class="actions">${actionButtons(r, i)}</div>
+        </div>
+        <div class="body">
+          <div class="name" title="${esc(r.name)}">${esc(r.name)}</div>
+          <div class="meta">${esc(r.set_name)} · #${esc(r.number)}</div>
+          <div class="prices">${priceLine(r)}</div>
+          <div class="profit"><span>+${usd(r.profit_usd)}</span><span>${Math.round(r.roi_pct)}%</span></div>
+        </div>
+      </div>`).join("")}</div>`;
+  } else {
+    el.innerHTML = `<div class="tablewrap"><table class="t"><thead><tr>
+      ${cardActions.length ? "<th></th>" : ""}<th></th><th data-sort="name">Card</th><th>Set</th><th>Finish</th>
+      <th class="n" data-sort="cm">CM €</th><th class="n">TCG $</th><th class="n">MP $</th><th class="n" title="Card Kingdom buylist, cash">CK buy $</th><th>Via</th>
+      <th class="n" data-sort="ratio">Ratio</th><th class="n">Cost $</th><th class="n">Net $</th><th class="n" data-sort="profit">Profit $</th><th class="n" data-sort="roi">ROI</th>
+      <th class="n" title="Mana Pool listings">MP qty</th><th class="n" title="EDHREC rank">EDHREC</th>
+      </tr></thead><tbody>${rows.map((r, i) => `<tr data-i="${i}">
+        ${cardActions.length ? `<td><div style="display:flex;gap:3px">${actionButtons(r, i).replaceAll('class="act', 'class="btn sm act-t')}</div></td>` : ""}
+        <td>${r.image_small ? `<img class="thumb" loading="lazy" src="${esc(r.image_small)}" data-big="${esc(r.image_normal)}" alt="">` : ""}</td>
+        <td>${esc(r.name)}${r.finish !== "nonfoil" ? " ✦" : ""}</td><td title="${esc(r.set_name)}">${esc(r.set)} #${esc(r.number)}</td><td>${r.finish}</td>
+        <td class="n">${eur(r.cardmarket_eur)}</td><td class="n">${usd(r.tcgplayer_usd)}</td><td class="n">${usd(r.manapool_usd)}</td><td class="n">${usd(r.cardkingdom_buy_usd)}</td>
+        <td>${STORE_LABEL[r.sold_on]}${r.us_disagree > 1.5 ? ` <span class="warn" title="TCGplayer and Mana Pool disagree by ${r.us_disagree}×">⚠</span>` : ""}</td>
+        <td class="n">${r.ratio.toFixed(2)}×</td><td class="n">${usd(r.landed_cost_usd)}</td><td class="n">${usd(r.net_sale_usd)}</td>
+        <td class="n pos">${usd(r.profit_usd)}</td><td class="n">${Math.round(r.roi_pct)}%</td>
+        <td class="n">${r.mp_qty || "–"}</td><td class="n">${r.edhrec_rank ?? "–"}</td>
+      </tr>`).join("")}</tbody></table></div>`;
+  }
+}
+
+$("#results").addEventListener("click", e => {
+  const a = e.target.closest("[data-act]");
+  if (a) { e.stopPropagation(); Promise.resolve(cardActions[+a.dataset.act].onClick(rows[+a.dataset.row])).then(render); return; }
+  const th = e.target.closest("th[data-sort]");
+  if (th) { $("#sort").value = th.dataset.sort; search(); return; }
+  const it = e.target.closest("[data-i]");
+  if (it) openDrawer(rows[+it.dataset.i]);
+});
+// hover preview in table view
+$("#results").addEventListener("mousemove", e => {
+  const h = $("#hover"), t = e.target.closest("img.thumb");
+  if (!t) { h.style.display = "none"; return; }
+  if (h.src !== t.dataset.big) h.src = t.dataset.big;
+  h.style.display = "block";
+  const y = Math.min(e.clientY - 40, innerHeight - 360);
+  h.style.left = (e.clientX + 24) + "px"; h.style.top = Math.max(8, y) + "px";
+});
+$("#results").addEventListener("mouseleave", () => $("#hover").style.display = "none");
+
+// ---- detail drawer with live Scryfall data ----
+async function openDrawer(r) {
+  const d = $("#drawer");
+  const via = STORE_LABEL[r.sold_on] || "";
+  d.innerHTML = `<button class="btn close" id="dClose">Close</button>
+    <h2>${esc(r.name)}</h2>
+    <div class="meta">${esc(r.set_name)} (${esc(r.set)}) · #${esc(r.number)} · ${esc(r.rarity)} · ${esc(r.finish)}${r.reserved ? " · Reserved List" : ""}</div>
+    <div class="imgwrap ${r.finish !== "nonfoil" ? "foil" : ""}" style="max-width:340px;margin:14px auto;border-radius:14px;overflow:hidden">
+      ${r.image_normal ? `<img src="${esc(r.image_normal)}" alt="${esc(r.name)}">` : ""}</div>
+    <div class="kv">
+      <span class="h"></span><span class="h">Daily data</span><span class="h">Live (Scryfall)</span>
+      <span class="cm">Cardmarket trend</span><span>${eur(r.cardmarket_eur)}</span><span id="liveEur">…</span>
+      <span class="tcg">TCGplayer market</span><span>${usd(r.tcgplayer_usd)}</span><span id="liveUsd">…</span>
+      <span class="mp">Mana Pool market</span><span>${usd(r.manapool_usd)}</span><span class="muted">${r.mp_qty ? r.mp_qty + " listed" : ""}</span>
+      <span class="ck">Card Kingdom buylist</span><span>${usd(r.cardkingdom_buy_usd)}</span><span class="muted">${r.ck_qty ? "buying " + r.ck_qty : ""}</span>
+      <span>Landed cost</span><span>${usd(r.landed_cost_usd)}</span><span></span>
+      <span>${sellMode === "credit" ? "Store credit" : sellMode === "market" ? "Market value" : "Net after fees"} (${via})</span><span>${usd(r.net_sale_usd)}</span><span></span>
+      <span><b>Profit</b></span><span class="pos"><b>${usd(r.profit_usd)} (${Math.round(r.roi_pct)}%)</b></span><span id="liveProfit"></span>
+      ${r.edhrec_rank ? `<span>EDHREC rank</span><span>#${r.edhrec_rank.toLocaleString()}</span><span></span>` : ""}
+    </div>
+    <div class="btn-row" style="margin-bottom:12px" id="dActions">
+      ${r.cardmarket_url ? `<a class="btn primary" target="_blank" rel="noopener" href="${esc(r.cardmarket_url)}">Cardmarket</a>` : ""}
+      ${r.tcgplayer_url ? `<a class="btn" target="_blank" rel="noopener" href="${esc(r.tcgplayer_url)}">TCGplayer</a>` : ""}
+      ${r.manapool_url ? `<a class="btn" target="_blank" rel="noopener" href="${esc(r.manapool_url)}">Mana Pool</a>` : ""}
+      ${r.cardkingdom_url ? `<a class="btn" target="_blank" rel="noopener" href="${esc(r.cardkingdom_url)}">Card Kingdom</a>` : ""}
+      <a class="btn" target="_blank" rel="noopener" href="${esc(r.scryfall_url)}">Scryfall</a>
+    </div>
+    <div id="dSections"></div>
+    <h3>Card text</h3>
+    <div id="oracle" class="oracle">Loading card text…</div>`;
+  for (const a of cardActions) {
+    const b = document.createElement("button"); b.className = "btn";
+    const lbl = () => `${typeof a.icon === "function" ? a.icon(r) : a.icon} ${typeof a.title === "function" ? a.title(r) : a.title}`;
+    b.textContent = lbl();
+    b.onclick = async () => { await a.onClick(r); b.textContent = lbl(); render(); };
+    $("#dActions").appendChild(b);
+  }
+  for (const fn of drawerSections) {
+    const el = document.createElement("div"); $("#dSections").appendChild(el);
+    try { fn(r, el); } catch (e) { console.error(e); }
+  }
+  d.classList.add("open"); $("#drawerBg").classList.add("open");
+  $("#dClose").onclick = closeDrawer;
+
+  try {
+    const c = await scryfall(`https://api.scryfall.com/cards/${r.id}`);
+    const fk = {nonfoil: ["eur", "usd"], foil: ["eur_foil", "usd_foil"], etched: ["eur_etched", "usd_etched"]}[r.finish];
+    const le = parseFloat(c.prices?.[fk[0]]), lu = parseFloat(c.prices?.[fk[1]]);
+    $("#liveEur").innerHTML = isNaN(le) ? "–" : diff(eur(le), le, r.cardmarket_eur, true);
+    $("#liveUsd").innerHTML = isNaN(lu) ? "–" : diff(usd(lu), lu, r.tcgplayer_usd, false);
+    if (!isNaN(le)) {
+      const price = r.sold_on === "tcgplayer" ? (isNaN(lu) ? r.tcgplayer_usd : lu) : r.sold_on === "manapool" ? r.manapool_usd : r.cardkingdom_buy_usd;
+      const landed = MTG.landedCost(le);
+      const pr = (r.sold_on === "offer" ? r.net_sale_usd : MTG.netSale(price, r.sold_on)) - landed;
+      $("#liveProfit").innerHTML = `<b class="${pr >= 0 ? "pos" : "neg"}">${usd(pr)} (${Math.round(pr / landed * 100)}%)</b>`;
+    }
+    const faces = c.card_faces && !c.oracle_text ? c.card_faces : [c];
+    $("#oracle").textContent = faces.map(f => [f.name, f.mana_cost, f.type_line, f.oracle_text].filter(Boolean).join("\n")).join("\n\n");
+  } catch { $("#oracle").textContent = "Could not reach Scryfall."; }
+}
+function diff(label, now, then, lowerIsGood) {
+  if (then == null) return label;
+  const d = now - then; if (Math.abs(d) < 0.005) return label;
+  const good = lowerIsGood ? d < 0 : d > 0;
+  return `${label} <span class="${good ? "pos" : "neg"}">(${d > 0 ? "+" : ""}${d.toFixed(2)})</span>`;
+}
+function closeDrawer() { $("#drawer").classList.remove("open"); $("#drawerBg").classList.remove("open"); }
+$("#drawerBg").onclick = closeDrawer;
+addEventListener("keydown", e => { if (e.key === "Escape") closeDrawer(); });
+
+// ---- wiring ----
+document.querySelectorAll("aside fieldset input:not(#setInput), aside details input, #sort").forEach(el => el.addEventListener("input", search));
+$("#more").onclick = () => load(false);
+$("#reset").onclick = () => { writeFilters(defaultFilters()); search(); };
+$("#toggleFilters").onclick = () => $("#sidebar").classList.toggle("show");
+$("#view").addEventListener("click", e => {
+  const v = e.target.dataset.v; if (!v) return;
+  view = v; store.set("view", v);
+  document.querySelectorAll("#view button").forEach(b => b.classList.toggle("on", b.dataset.v === v));
+  render();
+});
+$("#refresh").onclick = async () => {
+  const b = $("#refresh"); b.disabled = true; b.textContent = "Refreshing…";
+  try { await api("/api/refresh", {method: "POST"}); await init(); toast("Prices refreshed"); }
+  catch (e) { toast("Refresh failed: " + e.message); }
+  finally { b.disabled = false; b.textContent = "Refresh data"; }
+};
+
+let featuresLoaded = false;
+async function init() {
+  meta = await api("/api/meta");
+  defaults = meta.defaults;
+  $("#setList").innerHTML = meta.sets.map(s => `<option value="${esc(s.name)} (${esc(s.code)})">`).join("");
+  $("#dataInfo").textContent = `${meta.count.toLocaleString()} priced printings · ${meta.data_file} · Mana Pool ${meta.mp_as_of.slice(0, 10)} · Card Kingdom ${(meta.ck_as_of || "").slice(0, 10)}`;
+  const saved = store.get("filters", null);
+  writeFilters(saved ? {...defaultFilters(), ...saved, fx: meta.fx} : defaultFilters());
+  document.querySelectorAll("#view button").forEach(b => b.classList.toggle("on", b.dataset.v === view));
+  if (!featuresLoaded) {
+    featuresLoaded = true;
+    await Promise.all(meta.features.map(src => new Promise(res => {
+      const s = document.createElement("script"); s.src = src; s.onload = s.onerror = res; document.head.appendChild(s);
+    })));
+    const tab = store.get("tab", "scanner");
+    if (document.querySelector(`[data-tab="${tab}"]`)) showTab(tab);
+  }
+  emit("meta", meta);
+  load(true);
+}
+init();
+</script>
+</body>
+</html>

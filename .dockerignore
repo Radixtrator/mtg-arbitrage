@@ -1,0 +1,6 @@
+.cache/
+data/
+.git/
+.claude/
+**/__pycache__/
+*.csv
