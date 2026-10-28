@@ -21,6 +21,7 @@ import json
 import os
 import re
 import sys
+import urllib.parse
 import urllib.request
 from pathlib import Path
 
@@ -29,6 +30,7 @@ CACHE = Path(__file__).resolve().parent / ".cache"
 MANAPOOL_URL = "https://manapool.com/api/v1/prices/singles"
 CARDKINGDOM_URL = "https://api.cardkingdom.com/api/v2/pricelist"
 CARDMARKET_GUIDE_URL = "https://downloads.s3.cardmarket.com/productCatalog/priceGuide/price_guide_1.json"
+CARDMARKET_PRODUCTS_URL = "https://downloads.s3.cardmarket.com/productCatalog/productList/products_singles_1.json"
 
 FINISHES = {
     "nonfoil": ("eur", "usd"),
@@ -160,21 +162,28 @@ def get_cardkingdom_buylist(refresh=False):
 
 
 def get_cardmarket_guide(refresh=False):
-    """Cardmarket's own daily price guide (cached per UTC day) as {idProduct: {finish: trend EUR}}.
+    """Cardmarket's own daily downloads (cached per UTC day) as {idProduct: {finish: trend EUR, "exp": idExpansion}}.
 
-    Fills Cardmarket prices Scryfall lacks, e.g. Secret Lair "★" foils that Scryfall lists as their own
-    printing but Cardmarket sells as the foil of the regular product."""
+    The price guide fills Cardmarket prices Scryfall lacks, e.g. Secret Lair "★" foils that Scryfall lists as
+    their own printing but Cardmarket sells as the foil of the regular product. The product list gives each
+    product's expansion, which the Cardmarket links need (see cardmarket_link)."""
     CACHE.mkdir(exist_ok=True)
-    path = CACHE / f"cmguide-{datetime.datetime.now(datetime.UTC):%Y%m%d}.json"
-    if not path.exists() or refresh:
-        for old in CACHE.glob("cmguide-*"):
-            old.unlink()
-        download(CARDMARKET_GUIDE_URL, path)
-    with open(path, encoding="utf-8") as f:
-        data = json.load(f)
+    day = f"{datetime.datetime.now(datetime.UTC):%Y%m%d}"
+    files = {}
+    for kind, url in (("cmguide", CARDMARKET_GUIDE_URL), ("cmproducts", CARDMARKET_PRODUCTS_URL)):
+        path = files[kind] = CACHE / f"{kind}-{day}.json"
+        if not path.exists() or refresh:
+            for old in CACHE.glob(f"{kind}-*"):
+                old.unlink()
+            download(url, path)
     out = {}
+    with open(files["cmproducts"], encoding="utf-8") as f:
+        for p in json.load(f).get("products", []):
+            out[p["idProduct"]] = {"exp": p.get("idExpansion")}
+    with open(files["cmguide"], encoding="utf-8") as f:
+        data = json.load(f)
     for g in data.get("priceGuides", []):
-        out[g["idProduct"]] = {"nonfoil": g.get("trend") or None, "foil": g.get("trend-foil") or None}
+        out.setdefault(g["idProduct"], {}).update(nonfoil=g.get("trend") or None, foil=g.get("trend-foil") or None)
     return out, data.get("createdAt", "")
 
 
@@ -217,7 +226,7 @@ def load_candidates(path, manapool=None, cardkingdom=None, cmguide=None):
     def guide_eur(pid, fin):
         return (cmguide.get(pid) or {}).get("foil" if fin == "etched" else fin) or 0
 
-    def add(c, fin, eur, cm_url, cm_note=""):
+    def add(c, fin, eur, pid, cm_note=""):
         uk = FINISHES[fin][1]
         tcg = float((c.get("prices") or {}).get(uk) or 0) or None
         mp = manapool.get(c["id"], {})
@@ -249,7 +258,7 @@ def load_candidates(path, manapool=None, cardkingdom=None, cmguide=None):
             "reserved": bool(c.get("reserved")),
             "image_small": small,
             "image_normal": normal,
-            "cardmarket_url": cardmarket_link(cm_url, fin),
+            "cardmarket_url": cardmarket_link(c["name"], (cmguide.get(pid) or {}).get("exp")),
             "cm_note": cm_note,
             "tcgplayer_id": tcgplayer_id(c, fin),
             "tcgplayer_url": tcgplayer_link(tcgplayer_id(c, fin), fin) or uris.get("tcgplayer", ""),
@@ -265,24 +274,21 @@ def load_candidates(path, manapool=None, cardkingdom=None, cmguide=None):
         finishes = set(c.get("finishes") or [])
         number = c.get("collector_number", "")
         pid = c.get("cardmarket_id")
-        cm_url = (c.get("purchase_uris") or {}).get("cardmarket") or (
-            f"https://www.cardmarket.com/en/Magic/Products?idProduct={pid}" if pid else "")
         if pid:
-            products[(c["set"], number)] = (pid, finishes, cm_url)
+            products[(c["set"], number)] = (pid, finishes)
         for fin, (ek, _) in FINISHES.items():
             eur = float(prices.get(ek) or 0)
             if eur > 0:
-                add(c, fin, eur, cm_url)
+                add(c, fin, eur, pid)
             elif fin in finishes and pid and guide_eur(pid, fin):
-                add(c, fin, guide_eur(pid, fin), cm_url, "Cardmarket price guide")
+                add(c, fin, guide_eur(pid, fin), pid, "Cardmarket price guide")
             elif fin in finishes and not pid and fin != "nonfoil" and re.search(r"[^0-9A-Za-z]$", number):
                 orphans.append((c, fin))
     for c, fin in orphans:
         base = re.sub(r"[^0-9A-Za-z]+$", "", c.get("collector_number", ""))
         sib = products.get((c["set"], base))
         if sib and not sib[1] & {"foil", "etched"}:
-            pid, _, cm_url = sib
-            add(c, fin, guide_eur(pid, fin), cm_url, f"Cardmarket sells this as the foil of #{base}")
+            add(c, fin, guide_eur(sib[0], fin), sib[0], f"Cardmarket sells this as the foil of #{base}")
     return out
 
 
@@ -299,11 +305,18 @@ def tcgplayer_link(pid, fin):
     return f"https://www.tcgplayer.com/product/{pid}?Language=English{printing}"
 
 
-def cardmarket_link(url, fin):
-    """Scryfall's Cardmarket link plus English + foil/non-foil offer filters."""
-    if not url:
-        return ""
-    return f"{url}&language=1&isFoil={'N' if fin == 'nonfoil' else 'Y'}"
+def cardmarket_link(name, exp=None):
+    """Cardmarket search for this card name, limited to its expansion when known.
+
+    Not the product page: Cloudflare hard-blocks Cardmarket's Products?idProduct= URLs (the ones Scryfall
+    hands out), while search pages only get the normal human check."""
+    front = name.split(" // ")[0]
+    q = {"searchString": front}
+    if exp:
+        q["idExpansion"] = exp
+    if front == name:
+        q["exactMatch"] = "on"
+    return "https://www.cardmarket.com/en/Magic/Products/Search?" + urllib.parse.urlencode(q)
 
 
 def net_sale(price, store, p):

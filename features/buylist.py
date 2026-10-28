@@ -100,6 +100,8 @@ def _enrich(item):
         "ck_qty": c.get("ck_qty") if c else None,
         "priced": bool(c),
         "cardkingdom_url": (c or {}).get("cardkingdom_url") or item.get("cardkingdom_url", ""),
+        "cardmarket_url": (c or {}).get("cardmarket_url") or item.get("cardmarket_url", ""),
+        "tcgplayer_url": (c or {}).get("tcgplayer_url") or item.get("tcgplayer_url", ""),
         "image_normal": (c or {}).get("image_normal", ""),
         "scryfall_url": (c or {}).get("scryfall_url", ""),
         "rarity": (c or {}).get("rarity", ""),

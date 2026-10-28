@@ -23,7 +23,7 @@ All sources are matched on the **Scryfall card ID**, which identifies one exact 
 | [Scryfall bulk data](https://scryfall.com/docs/api/bulk-data) | Cardmarket trend € and TCGplayer market $, plus images and metadata | daily |
 | [Mana Pool prices](https://manapool.com/api/v1/prices/singles) | Mana Pool market $ and number of listings | daily cache |
 | [Card Kingdom pricelist](https://api.cardkingdom.com/api/v2/pricelist) | Card Kingdom's **buylist** cash offer | daily cache |
-| [Cardmarket price guide](https://downloads.s3.cardmarket.com/productCatalog/priceGuide/price_guide_1.json) | Cardmarket trend € for printings Scryfall has no price for | daily cache |
+| [Cardmarket price guide + product list](https://www.cardmarket.com/en/Magic/Data/Price-Guide) | Cardmarket trend € for printings Scryfall has no price for, and each product's set for the Cardmarket links | daily cache |
 | [Frankfurter](https://frankfurter.dev) | EUR→USD rate (ECB reference rate) | each start |
 
 Some printings exist as two cards on Scryfall but one product on Cardmarket. Examples are Secret Lair rainbow foils (`#1596★`), 7th–9th Edition foils and Warhammer 40K surge foils. Their Cardmarket price is the foil price of the regular product, and the card panel says so.
@@ -49,7 +49,8 @@ All of these numbers can be changed in the sidebar or with CLI flags. Import dut
 - **Scanner:** every opportunity, in a grid or table, with card images.
   - Click a card to see live Scryfall prices, a price history chart and links to each store.
   - **TCGplayer by finish:** the TCGplayer market price of every finish of the printing, taken from the daily Scryfall data. It warns when foil and non-foil prices differ a lot, and links to TCGplayer's listings filtered to the right finish. The app never contacts TCGplayer directly, because their terms ban automated price collection.
-  - Store links open filtered to English and the card's finish.
+  - The TCGplayer link opens filtered to English and the card's finish.
+  - The Cardmarket link opens a search for the card in its set. Cardmarket's firewall blocks direct product links like `Products?idProduct=…`. The search pages only show the normal "verify you are human" check, and a single match goes straight to the card.
 - **Buy list:** star cards from any tab and track each lot through *planned → ordered → received → listed → sold*.
   - You can edit quantity, condition, actual buy and sell prices, and the order reference.
   - The summary shows € to spend, expected profit, realized profit on sold lots, and price drift since you added each card.
