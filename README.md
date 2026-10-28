@@ -50,7 +50,7 @@ All of these numbers can be changed in the sidebar or with CLI flags. Import dut
   - Click a card to see live Scryfall prices, a price history chart and links to each store.
   - **TCGplayer by finish:** the TCGplayer market price of every finish of the printing, taken from the daily Scryfall data. It warns when foil and non-foil prices differ a lot, and links to TCGplayer's listings filtered to the right finish. The app never contacts TCGplayer directly, because their terms ban automated price collection.
   - The TCGplayer link opens filtered to English and the card's finish.
-  - The Cardmarket link opens a search for the card in its set. Cardmarket's firewall blocks direct product links like `Products?idProduct=…`. The search pages only show the normal "verify you are human" check, and a single match goes straight to the card.
+  - The Cardmarket link opens a search for the card in its set. Cardmarket's firewall blocks direct product links like `Products?idProduct=…`. The search pages only show the normal "verify you are human" check.
 - **Buy list:** star cards from any tab and track each lot through *planned → ordered → received → listed → sold*.
   - You can edit quantity, condition, actual buy and sell prices, and the order reference.
   - The summary shows € to spend, expected profit, realized profit on sold lots, and price drift since you added each card.
