@@ -131,7 +131,7 @@ To add a feature, drop a module in `features/` and a script in `ui/features/`. `
 - **Reference prices:** Cardmarket "trend" is an average, not the cheapest listing. Always check the actual offers in your condition and language.
 - **Grading:** Cardmarket grades condition more strictly than US sites, which works in your favor, but compare like with like.
 - **Thin markets:** "Market" prices for rare foils and promos can come from very few sales. The disagreement filter and the Card Kingdom buylist price are good sanity checks.
-- **Card Kingdom:** its buylist offers are capped (`qty_buying`) and change daily.
+- **Card Kingdom:** its buylist offers are capped (`qty_buying`) and change daily. Card Kingdom sometimes tags a variant (raised foil, Secret Lair reprint) with the regular printing's Scryfall id. Offers whose collector number disagrees with the printing are dropped. If several offers remain, the lowest is used.
 - **US customs:** carrying cards in for resale is technically commercial goods. Declare them as required.
 
 ## Data sources, terms and credits

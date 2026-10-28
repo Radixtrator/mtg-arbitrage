@@ -143,7 +143,8 @@ def get_manapool_prices(refresh=False):
 
 
 def get_cardkingdom_buylist(refresh=False):
-    """Card Kingdom cash buylist (cached per UTC day) as {scryfall_id: {finish: usd, "url": ...}}.
+    """Card Kingdom cash buylist (cached per UTC day) as {scryfall_id: [offer, ...]}, each offer
+    {"finish", "price", "qty", "url", "numbers"}. Pick one per printing+finish with ck_offer().
 
     Only entries CK is currently buying (qty_buying > 0) are kept."""
     CACHE.mkdir(exist_ok=True)
@@ -164,10 +165,29 @@ def get_cardkingdom_buylist(refresh=False):
             fin = "etched" if re.search(r"\betched\b", c.get("variation", ""), re.I) else "foil"
         else:
             fin = "nonfoil"
-        entry = out.setdefault(c["scryfall_id"], {"url": base + c.get("url", "")})
-        entry[fin] = max(price, entry.get(fin) or 0)
-        entry[fin + "_qty"] = c.get("qty_buying", 0)
+        out.setdefault(c["scryfall_id"], []).append({
+            "finish": fin, "price": price, "qty": c.get("qty_buying", 0), "url": base + c.get("url", ""),
+            "numbers": ck_numbers(c.get("variation") or ""),
+        })
     return out, data.get("meta", {}).get("created_at", "")
+
+
+def ck_numbers(variation):
+    """Collector numbers CK writes at the start of a variation: "0096 - Raised Foil", "1928 - Squidward ...",
+    "003 // 002". Bare years like "2018 Lunar New Year" don't count."""
+    m = re.match(r"\s*(\d{1,4}(?:\s*//\s*\d{1,4})*)\s*(?:-|$)", variation)
+    return {int(n) for n in re.findall(r"\d+", m.group(1))} if m else set()
+
+
+def ck_offer(offers, fin, number):
+    """CK's offer for one printing+finish, or None.
+
+    CK sometimes tags a variant (a raised foil, a Secret Lair reprint) with the regular printing's Scryfall id;
+    drop offers whose own collector number disagrees. If several remain, take the lowest, to stay conservative."""
+    n = re.match(r"\d+", number or "")
+    n = int(n.group()) if n else None
+    ok = [o for o in offers if o["finish"] == fin and not (o["numbers"] and n is not None and n not in o["numbers"])]
+    return min(ok, key=lambda o: o["price"]) if ok else None
 
 
 def get_cardmarket_guide(refresh=False):
@@ -239,9 +259,9 @@ def load_candidates(path, manapool=None, cardkingdom=None, cmguide=None):
         uk = FINISHES[fin][1]
         tcg = float((c.get("prices") or {}).get(uk) or 0) or None
         mp = manapool.get(c["id"], {})
-        ck = cardkingdom.get(c["id"], {})
+        ck = ck_offer(cardkingdom.get(c["id"], []), fin, c.get("collector_number")) or {}
         mpp = mp.get(fin)
-        ckp = ck.get(fin)
+        ckp = ck.get("price")
         if eur <= 0 or not (tcg or mpp or ckp):
             return
         uris = c.get("purchase_uris") or {}
@@ -264,7 +284,7 @@ def load_candidates(path, manapool=None, cardkingdom=None, cmguide=None):
             "mp": mpp,
             "mp_qty": mp.get("qty", 0),
             "ck": ckp,
-            "ck_qty": ck.get(fin + "_qty", 0) if ckp else 0,
+            "ck_qty": ck.get("qty", 0),
             "edhrec_rank": c.get("edhrec_rank"),
             "reserved": bool(c.get("reserved")),
             "image_small": small,
@@ -274,7 +294,7 @@ def load_candidates(path, manapool=None, cardkingdom=None, cmguide=None):
             "tcgplayer_id": tcgplayer_id(c, fin),
             "tcgplayer_url": tcgplayer_link(tcgplayer_id(c, fin), fin, c.get("lang", "en")) or uris.get("tcgplayer", ""),
             "manapool_url": mp.get("url", ""),
-            "cardkingdom_url": ck.get("url", "") if ckp else "",
+            "cardkingdom_url": ck.get("url", ""),
             "scryfall_url": c.get("scryfall_uri", ""),
         })
 
