@@ -23,7 +23,10 @@ All sources are matched on the **Scryfall card ID**, which identifies one exact 
 | [Scryfall bulk data](https://scryfall.com/docs/api/bulk-data) | Cardmarket trend € and TCGplayer market $, plus images and metadata | daily |
 | [Mana Pool prices](https://manapool.com/api/v1/prices/singles) | Mana Pool market $ and number of listings | daily cache |
 | [Card Kingdom pricelist](https://api.cardkingdom.com/api/v2/pricelist) | Card Kingdom's **buylist** cash offer | daily cache |
+| [Cardmarket price guide](https://downloads.s3.cardmarket.com/productCatalog/priceGuide/price_guide_1.json) | Cardmarket trend € for printings Scryfall has no price for | daily cache |
 | [frankfurter.app](https://www.frankfurter.app) | EUR→USD rate (ECB) | each start |
+
+Some printings exist as two cards on Scryfall but one product on Cardmarket. Examples are Secret Lair rainbow foils (`#1596★`), 7th–9th Edition foils and Warhammer 40K surge foils. Their Cardmarket price is the foil price of the regular product, and the card panel says so.
 
 Card images come straight from Scryfall's image CDN. The card detail panel also fetches live prices from the Scryfall API, staying under their limit of 10 requests per second.
 

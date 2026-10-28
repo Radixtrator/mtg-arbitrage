@@ -8,6 +8,7 @@ Price sources, all keyed by Scryfall card id so matching is exact
                       prices.usd / usd_foil  -> TCGplayer market price (USD)
   Mana Pool           /api/v1/prices/singles -> Mana Pool market price (USD)
   Card Kingdom        /api/v2/pricelist      -> Card Kingdom cash buylist offer (USD)
+  Cardmarket          daily price guide      -> fills Cardmarket prices Scryfall is missing
 
 Stdlib only. Run `python3 mtg_arb.py --help` for options, or `python3 app.py`
 for the web UI.
@@ -27,6 +28,7 @@ UA = {"User-Agent": "mtg-arb/0.1", "Accept": "application/json"}
 CACHE = Path(__file__).resolve().parent / ".cache"
 MANAPOOL_URL = "https://manapool.com/api/v1/prices/singles"
 CARDKINGDOM_URL = "https://api.cardkingdom.com/api/v2/pricelist"
+CARDMARKET_GUIDE_URL = "https://downloads.s3.cardmarket.com/productCatalog/priceGuide/price_guide_1.json"
 
 FINISHES = {
     "nonfoil": ("eur", "usd"),
@@ -157,6 +159,25 @@ def get_cardkingdom_buylist(refresh=False):
     return out, data.get("meta", {}).get("created_at", "")
 
 
+def get_cardmarket_guide(refresh=False):
+    """Cardmarket's own daily price guide (cached per UTC day) as {idProduct: {finish: trend EUR}}.
+
+    Fills Cardmarket prices Scryfall lacks, e.g. Secret Lair "★" foils that Scryfall lists as their own
+    printing but Cardmarket sells as the foil of the regular product."""
+    CACHE.mkdir(exist_ok=True)
+    path = CACHE / f"cmguide-{datetime.datetime.now(datetime.UTC):%Y%m%d}.json"
+    if not path.exists() or refresh:
+        for old in CACHE.glob("cmguide-*"):
+            old.unlink()
+        download(CARDMARKET_GUIDE_URL, path)
+    with open(path, encoding="utf-8") as f:
+        data = json.load(f)
+    out = {}
+    for g in data.get("priceGuides", []):
+        out[g["idProduct"]] = {"nonfoil": g.get("trend") or None, "foil": g.get("trend-foil") or None}
+    return out, data.get("createdAt", "")
+
+
 def iter_cards(path):
     opener = gzip.open if path.suffix == ".gz" else open
     with opener(path, "rt", encoding="utf-8") as f:
@@ -181,52 +202,85 @@ def card_images(c):
     return imgs.get("small", ""), imgs.get("normal", "")
 
 
-def load_candidates(path, manapool=None, cardkingdom=None):
-    """Every English paper printing+finish with a EUR price and at least one US price."""
+def load_candidates(path, manapool=None, cardkingdom=None, cmguide=None):
+    """Every English paper printing+finish with a EUR price and at least one US price.
+
+    EUR comes from Scryfall, else from Cardmarket's price guide via the printing's cardmarket_id.
+    Printings Scryfall doesn't link to Cardmarket at all, like Secret Lair "★" foils (#1596★), get the
+    guide's foil price of their same-numbered sibling (#1596) when that sibling has no foil of its own:
+    Cardmarket sells them as one product."""
     manapool = manapool or {}
     cardkingdom = cardkingdom or {}
-    out = []
+    cmguide = cmguide or {}
+    out, orphans, products = [], [], {}
+
+    def guide_eur(pid, fin):
+        return (cmguide.get(pid) or {}).get("foil" if fin == "etched" else fin) or 0
+
+    def add(c, fin, eur, cm_url, cm_note=""):
+        uk = FINISHES[fin][1]
+        tcg = float((c.get("prices") or {}).get(uk) or 0) or None
+        mp = manapool.get(c["id"], {})
+        ck = cardkingdom.get(c["id"], {})
+        mpp = mp.get(fin)
+        ckp = ck.get(fin)
+        if eur <= 0 or not (tcg or mpp or ckp):
+            return
+        uris = c.get("purchase_uris") or {}
+        small, normal = card_images(c)
+        out.append({
+            "id": c["id"],
+            "name": c["name"],
+            "set": c["set"].upper(),
+            "set_name": c.get("set_name", ""),
+            "number": c.get("collector_number", ""),
+            "finish": fin,
+            "rarity": c.get("rarity", ""),
+            "released_at": c.get("released_at", ""),
+            "eur": eur,
+            "tcg": tcg,
+            "mp": mpp,
+            "mp_qty": mp.get("qty", 0),
+            "ck": ckp,
+            "ck_qty": ck.get(fin + "_qty", 0) if ckp else 0,
+            "edhrec_rank": c.get("edhrec_rank"),
+            "reserved": bool(c.get("reserved")),
+            "image_small": small,
+            "image_normal": normal,
+            "cardmarket_url": cardmarket_link(cm_url, fin),
+            "cm_note": cm_note,
+            "tcgplayer_id": tcgplayer_id(c, fin),
+            "tcgplayer_url": tcgplayer_link(tcgplayer_id(c, fin), fin) or uris.get("tcgplayer", ""),
+            "manapool_url": mp.get("url", ""),
+            "cardkingdom_url": ck.get("url", "") if ckp else "",
+            "scryfall_url": c.get("scryfall_uri", ""),
+        })
+
     for c in iter_cards(path):
         if c.get("digital") or c.get("lang", "en") != "en":
             continue
         prices = c.get("prices") or {}
-        mp = manapool.get(c["id"], {})
-        ck = cardkingdom.get(c["id"], {})
-        uris = c.get("purchase_uris") or {}
-        small, normal = card_images(c)
-        for fin, (ek, uk) in FINISHES.items():
+        finishes = set(c.get("finishes") or [])
+        number = c.get("collector_number", "")
+        pid = c.get("cardmarket_id")
+        cm_url = (c.get("purchase_uris") or {}).get("cardmarket") or (
+            f"https://www.cardmarket.com/en/Magic/Products?idProduct={pid}" if pid else "")
+        if pid:
+            products[(c["set"], number)] = (pid, finishes, cm_url)
+        for fin, (ek, _) in FINISHES.items():
             eur = float(prices.get(ek) or 0)
-            tcg = float(prices.get(uk) or 0) or None
-            mpp = mp.get(fin)
-            ckp = ck.get(fin)
-            if eur <= 0 or not (tcg or mpp or ckp):
-                continue
-            out.append({
-                "id": c["id"],
-                "name": c["name"],
-                "set": c["set"].upper(),
-                "set_name": c.get("set_name", ""),
-                "number": c.get("collector_number", ""),
-                "finish": fin,
-                "rarity": c.get("rarity", ""),
-                "released_at": c.get("released_at", ""),
-                "eur": eur,
-                "tcg": tcg,
-                "mp": mpp,
-                "mp_qty": mp.get("qty", 0),
-                "ck": ckp,
-                "ck_qty": ck.get(fin + "_qty", 0) if ckp else 0,
-                "edhrec_rank": c.get("edhrec_rank"),
-                "reserved": bool(c.get("reserved")),
-                "image_small": small,
-                "image_normal": normal,
-                "cardmarket_url": cardmarket_link(uris.get("cardmarket", ""), fin),
-                "tcgplayer_id": tcgplayer_id(c, fin),
-                "tcgplayer_url": tcgplayer_link(tcgplayer_id(c, fin), fin) or uris.get("tcgplayer", ""),
-                "manapool_url": mp.get("url", ""),
-                "cardkingdom_url": ck.get("url", "") if ckp else "",
-                "scryfall_url": c.get("scryfall_uri", ""),
-            })
+            if eur > 0:
+                add(c, fin, eur, cm_url)
+            elif fin in finishes and pid and guide_eur(pid, fin):
+                add(c, fin, guide_eur(pid, fin), cm_url, "Cardmarket price guide")
+            elif fin in finishes and not pid and fin != "nonfoil" and re.search(r"[^0-9A-Za-z]$", number):
+                orphans.append((c, fin))
+    for c, fin in orphans:
+        base = re.sub(r"[^0-9A-Za-z]+$", "", c.get("collector_number", ""))
+        sib = products.get((c["set"], base))
+        if sib and not sib[1] & {"foil", "etched"}:
+            pid, _, cm_url = sib
+            add(c, fin, guide_eur(pid, fin), cm_url, f"Cardmarket sells this as the foil of #{base}")
     return out
 
 
@@ -411,6 +465,7 @@ def main():
     path = Path(a.file) if a.file else get_bulk_file(a.refresh)
     manapool, _ = get_manapool_prices(a.refresh)
     cardkingdom, _ = get_cardkingdom_buylist(a.refresh)
+    cmguide, _ = get_cardmarket_guide(a.refresh)
     params = {
         "min_usd": a.min_usd, "max_usd": a.max_usd, "min_profit": a.min_profit,
         "min_roi": a.min_roi, "max_ratio": a.max_ratio,
@@ -423,7 +478,7 @@ def main():
         "mp_fee": a.mp_fee, "mp_fee_cap": a.mp_fee_cap, "mp_processing": a.mp_processing, "mp_fixed": a.mp_fixed,
         "credit_pct": a.credit_pct, "ck_credit_bonus": a.ck_credit_bonus, "sort": a.sort,
     }
-    rows = score(load_candidates(path, manapool, cardkingdom), fx, params)
+    rows = score(load_candidates(path, manapool, cardkingdom, cmguide), fx, params)
     print_table(rows, fx, {**DEFAULTS, **params}, a.top)
     if a.csv and rows:
         with open(a.csv, "w", newline="", encoding="utf-8") as f:

@@ -52,6 +52,7 @@ class State:
     path = None
     mp_as_of = ""
     ck_as_of = ""
+    cm_as_of = ""
     cands = []
     sets = []
     data_dir = DATA
@@ -62,7 +63,8 @@ class State:
         rate = fx or mtg_arb.get_fx()
         manapool, mp_as_of = mtg_arb.get_manapool_prices(refresh)
         cardkingdom, ck_as_of = mtg_arb.get_cardkingdom_buylist(refresh)
-        cands = mtg_arb.load_candidates(path, manapool, cardkingdom)
+        cmguide, cm_as_of = mtg_arb.get_cardmarket_guide(refresh)
+        cands = mtg_arb.load_candidates(path, manapool, cardkingdom, cmguide)
         names = {}
         for c in cands:
             names.setdefault(c["set"], (c["set_name"], c["released_at"]))
@@ -70,7 +72,7 @@ class State:
                       key=lambda s: s["released"], reverse=True)
         with cls.lock:
             cls.fx, cls.path, cls.cands, cls.sets = rate, path, cands, sets
-            cls.mp_as_of, cls.ck_as_of = mp_as_of, ck_as_of
+            cls.mp_as_of, cls.ck_as_of, cls.cm_as_of = mp_as_of, ck_as_of, cm_as_of
         print(f"Loaded {len(cands)} priced printings from {path.name}, EUR->USD {rate}")
         for mod in FEATURES:
             if hasattr(mod, "on_load"):
@@ -208,7 +210,7 @@ class Handler(BaseHTTPRequestHandler):
         elif url.path == "/api/meta":
             with State.lock:
                 self.send_json({
-                    "fx": State.fx, "data_file": State.path.name, "mp_as_of": State.mp_as_of, "ck_as_of": State.ck_as_of,
+                    "fx": State.fx, "data_file": State.path.name, "mp_as_of": State.mp_as_of, "ck_as_of": State.ck_as_of, "cm_as_of": State.cm_as_of,
                     "count": len(State.cands), "sets": State.sets, "defaults": mtg_arb.DEFAULTS,
                     "features": sorted(f"/ui/features/{p.name}" for p in (UI / "features").glob("*.js")),
                 })

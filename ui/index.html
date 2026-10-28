@@ -560,6 +560,7 @@ async function openDrawer(r) {
   d.innerHTML = `<button class="btn close" id="dClose">Close</button>
     <h2>${esc(r.name)}</h2>
     <div class="meta">${esc(r.set_name)} (${esc(r.set)}) · #${esc(r.number)} · ${esc(r.rarity)} · ${esc(r.finish)}${r.reserved ? " · Reserved List" : ""}</div>
+    ${r.cm_note ? `<div class="note" style="margin-top:4px">Cardmarket price from ${r.cm_note.startsWith("Cardmarket sells") ? "the regular product — " + esc(r.cm_note.replace("Cardmarket sells this", "Cardmarket sells this printing")) : "Cardmarket's own price guide (Scryfall has none)"}.</div>` : ""}
     <div class="imgwrap ${r.finish !== "nonfoil" ? "foil" : ""}" style="max-width:340px;margin:14px auto;border-radius:14px;overflow:hidden">
       ${r.image_normal ? `<img src="${esc(r.image_normal)}" alt="${esc(r.name)}">` : ""}</div>
     <div class="kv">
@@ -646,7 +647,7 @@ async function init() {
   meta = await api("/api/meta");
   defaults = meta.defaults;
   $("#setList").innerHTML = meta.sets.map(s => `<option value="${esc(s.name)} (${esc(s.code)})">`).join("");
-  $("#dataInfo").textContent = `${meta.count.toLocaleString()} priced printings · ${meta.data_file} · Mana Pool ${meta.mp_as_of.slice(0, 10)} · Card Kingdom ${(meta.ck_as_of || "").slice(0, 10)}`;
+  $("#dataInfo").textContent = `${meta.count.toLocaleString()} priced printings · ${meta.data_file} · Mana Pool ${meta.mp_as_of.slice(0, 10)} · Card Kingdom ${(meta.ck_as_of || "").slice(0, 10)} · Cardmarket guide ${(meta.cm_as_of || "").slice(0, 10)}`;
   const saved = store.get("filters", null);
   writeFilters(saved ? {...defaultFilters(), ...saved, fx: meta.fx} : defaultFilters());
   document.querySelectorAll("#view button").forEach(b => b.classList.toggle("on", b.dataset.v === view));
