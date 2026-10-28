@@ -190,6 +190,16 @@ td img.thumb { width: 34px; border-radius: 3px; vertical-align: middle; }
     </fieldset>
 
     <fieldset>
+      <legend>Language</legend>
+      <div class="checks" id="langs">
+        <label><input type="checkbox" value="en" checked>English</label>
+        <label title="Japanese-only printings that have their own prices (Mystical Archive JP, alt-art planeswalkers, JP promos)"><input type="checkbox" value="ja" checked>Japanese</label>
+      </div>
+      <label class="f" style="margin-top:6px" title="Prerelease date stamps, and promo pack / event stamps">Promo stamps
+        <select id="stamps"><option value="">Show all</option><option value="hide">Hide stamped</option><option value="only">Only stamped</option></select></label>
+    </fieldset>
+
+    <fieldset>
       <legend>Rarity</legend>
       <div class="checks" id="rarities">
         <label><input type="checkbox" value="common">Common</label>
@@ -301,6 +311,7 @@ const $ = s => document.querySelector(s);
 const NUM = ["min_usd","max_usd","min_profit","min_roi","max_ratio","min_mp_qty","max_edhrec","max_disagree","fx","buy_markup",
              "per_card_cost","duty","sell_at","tcg_fee","tcg_fixed","mp_fee","mp_fee_cap","mp_processing","mp_fixed","credit_pct","ck_credit_bonus"];
 const PAGE = 120;
+const STAMP_LABEL = {date: "Prerelease date stamp", promo: "Promo stamp (promo pack / event)"};
 const STORE_LABEL = {tcgplayer: "TCGplayer", manapool: "Mana Pool", cardkingdom: "Card Kingdom", offer: "Offered price"};
 const store = {
   get(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch { return d; } },
@@ -411,6 +422,8 @@ function readFilters() {
   p.sort = $("#sort").value;
   p.finishes = [...document.querySelectorAll("#finishes input:checked")].map(i => i.value).join(",");
   p.rarities = [...document.querySelectorAll("#rarities input:checked")].map(i => i.value).join(",");
+  p.langs = [...document.querySelectorAll("#langs input:checked")].map(i => i.value).join(",");
+  p.stamps = $("#stamps").value;
   p.sets = sets.join(",");
   p.storefront = storefront;
   p.sell_mode = sellMode;
@@ -423,6 +436,9 @@ function writeFilters(p) {
   const fin = (p.finishes || "").split(","), rar = (p.rarities || "").split(",");
   document.querySelectorAll("#finishes input").forEach(i => i.checked = fin.includes(i.value));
   document.querySelectorAll("#rarities input").forEach(i => i.checked = rar.includes(i.value));
+  const lng = (p.langs ?? defaults.langs.join(",")).split(",");
+  document.querySelectorAll("#langs input").forEach(i => i.checked = lng.includes(i.value));
+  $("#stamps").value = p.stamps || "";
   sets = (p.sets || "").split(",").filter(Boolean);
   renderSetChips();
   storefront = p.storefront || "tcgplayer"; sellMode = p.sell_mode || "fees";
@@ -432,6 +448,7 @@ function defaultFilters() {
   const p = {};
   for (const k of NUM) p[k] = k === "fx" ? meta.fx : (defaults[k] ?? "");
   p.finishes = defaults.finishes.join(","); p.rarities = ""; p.sets = ""; p.q = ""; p.sort = "profit";
+  p.langs = defaults.langs.join(","); p.stamps = defaults.stamps;
   p.storefront = defaults.storefront; p.sell_mode = defaults.sell_mode;
   return p;
 }
@@ -515,6 +532,8 @@ function render() {
           <div class="badges">
             ${r.finish !== "nonfoil" ? `<span class="badge">${r.finish}</span>` : ""}
             ${r.reserved ? `<span class="badge" title="Reserved List">RL</span>` : ""}
+            ${r.lang === "ja" ? `<span class="badge" title="Japanese printing">JP</span>` : ""}
+            ${r.stamp ? `<span class="badge" title="${STAMP_LABEL[r.stamp]}">${r.stamp === "date" ? "date stamp" : "stamped"}</span>` : ""}
             ${r.us_disagree > 1.5 ? `<span class="badge" title="TCGplayer and Mana Pool prices disagree by ${r.us_disagree}× — check before buying">⚠ ${r.us_disagree}×</span>` : ""}
           </div>
           <div class="actions">${actionButtons(r, i)}</div>
@@ -535,7 +554,7 @@ function render() {
       </tr></thead><tbody>${rows.map((r, i) => `<tr data-i="${i}">
         ${cardActions.length ? `<td><div style="display:flex;gap:3px">${actionButtons(r, i).replaceAll('class="act', 'class="btn sm act-t')}</div></td>` : ""}
         <td>${r.image_small ? `<img class="thumb" loading="lazy" src="${esc(r.image_small)}" data-big="${esc(r.image_normal)}" alt="">` : ""}</td>
-        <td>${esc(r.name)}${r.finish !== "nonfoil" ? " ✦" : ""}</td><td title="${esc(r.set_name)}">${esc(r.set)} #${esc(r.number)}</td><td>${r.finish}</td>
+        <td>${esc(r.name)}${r.finish !== "nonfoil" ? " ✦" : ""}${r.lang === "ja" ? ` <span class="muted">JP</span>` : ""}${r.stamp ? ` <span class="muted" title="${STAMP_LABEL[r.stamp]}">stamped</span>` : ""}</td><td title="${esc(r.set_name)}">${esc(r.set)} #${esc(r.number)}</td><td>${r.finish}</td>
         <td class="n">${eur(r.cardmarket_eur)}</td><td class="n">${usd(r.tcgplayer_usd)}</td><td class="n">${usd(r.manapool_usd)}</td><td class="n">${usd(r.cardkingdom_buy_usd)}</td>
         <td>${STORE_LABEL[r.sold_on]}${r.us_disagree > 1.5 ? ` <span class="warn" title="TCGplayer and Mana Pool disagree by ${r.us_disagree}×">⚠</span>` : ""}</td>
         <td class="n">${r.ratio.toFixed(2)}×</td><td class="n">${usd(r.landed_cost_usd)}</td><td class="n">${usd(r.net_sale_usd)}</td>
@@ -570,7 +589,7 @@ async function openDrawer(r) {
   const via = STORE_LABEL[r.sold_on] || "";
   d.innerHTML = `<button class="btn close" id="dClose">Close</button>
     <h2>${esc(r.name)}</h2>
-    <div class="meta">${esc(r.set_name)} (${esc(r.set)}) · #${esc(r.number)} · ${esc(r.rarity)} · ${esc(r.finish)}${r.reserved ? " · Reserved List" : ""}</div>
+    <div class="meta">${esc(r.set_name)} (${esc(r.set)}) · #${esc(r.number)} · ${esc(r.rarity)} · ${esc(r.finish)}${r.reserved ? " · Reserved List" : ""}${r.lang === "ja" ? " · Japanese" : ""}${r.stamp ? " · " + STAMP_LABEL[r.stamp] : ""}</div>
     ${r.cm_note ? `<div class="note" style="margin-top:4px">Cardmarket price from ${r.cm_note.startsWith("Cardmarket sells") ? "the regular product — " + esc(r.cm_note.replace("Cardmarket sells this", "Cardmarket sells this printing")) : "Cardmarket's own price guide (Scryfall has none)"}.</div>` : ""}
     <div class="imgwrap ${r.finish !== "nonfoil" ? "foil" : ""}" style="max-width:340px;margin:14px auto;border-radius:14px;overflow:hidden">
       ${r.image_normal ? `<img src="${esc(r.image_normal)}" alt="${esc(r.name)}">` : ""}</div>
@@ -636,7 +655,7 @@ $("#drawerBg").onclick = closeDrawer;
 addEventListener("keydown", e => { if (e.key === "Escape") closeDrawer(); });
 
 // ---- wiring ----
-document.querySelectorAll("aside fieldset input:not(#setInput), aside details input, #sort").forEach(el => el.addEventListener("input", search));
+document.querySelectorAll("aside fieldset input:not(#setInput), aside fieldset select, aside details input, #sort").forEach(el => el.addEventListener("input", search));
 $("#more").onclick = () => load(false);
 $("#reset").onclick = () => { writeFilters(defaultFilters()); search(); };
 $("#toggleFilters").onclick = () => $("#sidebar").classList.toggle("show");

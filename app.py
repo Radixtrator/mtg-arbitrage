@@ -42,8 +42,8 @@ import mtg_arb
 ROOT = Path(__file__).resolve().parent
 UI = ROOT / "ui"
 DATA = ROOT / "data"  # user data that features persist (buy list, history, ...)
-LIST_PARAMS = {"finishes", "sets", "rarities"}
-STR_PARAMS = {"q", "sort", "sell_mode", "storefront"}
+LIST_PARAMS = mtg_arb.LIST_PARAMS
+STR_PARAMS = mtg_arb.STR_PARAMS
 
 
 class State:

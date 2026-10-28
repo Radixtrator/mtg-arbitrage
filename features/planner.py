@@ -33,8 +33,8 @@ import time
 
 import mtg_arb
 
-LIST_PARAMS = {"finishes", "sets", "rarities"}
-STR_PARAMS = {"q", "sort", "sell_mode", "storefront"}
+LIST_PARAMS = mtg_arb.LIST_PARAMS
+STR_PARAMS = mtg_arb.STR_PARAMS
 EPS = 1e-9
 CURVE = (25, 50, 75, 100, 150, 200)
 

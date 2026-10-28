@@ -44,6 +44,9 @@ MANAPOOL_FIELDS = {
     "etched": ("price_cents_nm_etched", "price_cents_etched"),
 }
 STORES = {"tcgplayer": "tcg", "manapool": "mp", "cardkingdom": "ck"}
+LANGS = {"en": "English", "ja": "Japanese"}
+# Scryfall promo_types that mean a stamp on the card face, and how the UI names them
+STAMPS = {"datestamped": "date", "stamped": "promo"}
 
 # Defaults shared by the CLI and the web UI.
 DEFAULTS = {
@@ -55,6 +58,8 @@ DEFAULTS = {
     "finishes": ["nonfoil", "foil", "etched"],
     "sets": None,
     "rarities": None,
+    "langs": ["en", "ja"],  # card languages to include (Scryfall only prices Japanese-only printings separately)
+    "stamps": "",  # promo stamps: "" any, "hide" unstamped only, "only" stamped only
     "q": "",
     "min_mp_qty": None,  # liquidity: min copies listed on Mana Pool (all finishes)
     "max_edhrec": None,  # demand: only cards ranked this high or better on EDHREC
@@ -75,6 +80,10 @@ DEFAULTS = {
     "ck_credit_bonus": 30.0,  # Card Kingdom pays this much more when you take store credit
     "sort": "profit",
 }
+
+# Request params that are lists (comma-separated in URLs) or plain strings; everything else in DEFAULTS is a number.
+LIST_PARAMS = {"finishes", "sets", "rarities", "langs"}
+STR_PARAMS = {"q", "sort", "sell_mode", "storefront", "stamps"}
 
 SORT_KEYS = {"profit": "profit_usd", "roi": "roi_pct", "ratio": "ratio",
              "sell": "sell_price_usd", "cm": "cardmarket_eur", "name": "name"}
@@ -244,6 +253,8 @@ def load_candidates(path, manapool=None, cardkingdom=None, cmguide=None):
             "set_name": c.get("set_name", ""),
             "number": c.get("collector_number", ""),
             "finish": fin,
+            "lang": c.get("lang", "en"),
+            "stamp": next((STAMPS[t] for t in STAMPS if t in (c.get("promo_types") or [])), ""),
             "rarity": c.get("rarity", ""),
             "released_at": c.get("released_at", ""),
             "eur": eur,
@@ -261,14 +272,14 @@ def load_candidates(path, manapool=None, cardkingdom=None, cmguide=None):
             "cardmarket_url": cardmarket_link(c["name"], (cmguide.get(pid) or {}).get("exp")),
             "cm_note": cm_note,
             "tcgplayer_id": tcgplayer_id(c, fin),
-            "tcgplayer_url": tcgplayer_link(tcgplayer_id(c, fin), fin) or uris.get("tcgplayer", ""),
+            "tcgplayer_url": tcgplayer_link(tcgplayer_id(c, fin), fin, c.get("lang", "en")) or uris.get("tcgplayer", ""),
             "manapool_url": mp.get("url", ""),
             "cardkingdom_url": ck.get("url", "") if ckp else "",
             "scryfall_url": c.get("scryfall_uri", ""),
         })
 
     for c in iter_cards(path):
-        if c.get("digital") or c.get("lang", "en") != "en":
+        if c.get("digital") or c.get("lang", "en") not in LANGS:
             continue
         prices = c.get("prices") or {}
         finishes = set(c.get("finishes") or [])
@@ -297,12 +308,12 @@ def tcgplayer_id(c, fin):
     return c.get("tcgplayer_etched_id") if fin == "etched" else c.get("tcgplayer_id")
 
 
-def tcgplayer_link(pid, fin):
-    """Product page pre-filtered to this finish, so foil and non-foil listings aren't mixed."""
+def tcgplayer_link(pid, fin, lang="en"):
+    """Product page pre-filtered to this finish and language, so foil and non-foil listings aren't mixed."""
     if not pid:
         return ""
     printing = {"nonfoil": "&Printing=Normal", "foil": "&Printing=Foil"}.get(fin, "")
-    return f"https://www.tcgplayer.com/product/{pid}?Language=English{printing}"
+    return f"https://www.tcgplayer.com/product/{pid}?Language={LANGS.get(lang, 'English')}{printing}"
 
 
 def cardmarket_link(name, exp=None):
@@ -344,6 +355,7 @@ def score(cands, fx, params):
     finishes = set(p["finishes"])
     sets = {s.upper() for s in p["sets"]} if p["sets"] else None
     rarities = set(p["rarities"]) if p["rarities"] else None
+    langs = set(p["langs"] or LANGS)
     q = p["q"].lower().strip()
     stores = list(STORES) if p["storefront"] == "best" else [p["storefront"]]
 
@@ -354,6 +366,10 @@ def score(cands, fx, params):
         if sets and c["set"] not in sets:
             continue
         if rarities and c["rarity"] not in rarities:
+            continue
+        if c["lang"] not in langs:
+            continue
+        if (p["stamps"] == "hide" and c["stamp"]) or (p["stamps"] == "only" and not c["stamp"]):
             continue
         if q and q not in c["name"].lower():
             continue
@@ -421,7 +437,9 @@ def print_table(rows, fx, p, top):
     print("-" * len(hdr))
     money = lambda v: f"{v:>8.2f}" if v else f"{'-':>8}"  # noqa: E731
     for i, r in enumerate(rows[:top], 1):
-        name = r["name"] if len(r["name"]) <= 36 else r["name"][:33] + "..."
+        tag = (" [JP]" if r["lang"] == "ja" else "") + (" [stamp]" if r["stamp"] else "")
+        name = r["name"] if len(r["name"]) + len(tag) <= 36 else r["name"][:33 - len(tag)] + "..."
+        name += tag
         print(f"{i:>3}  {name:<36} {r['set']:<6} {r['finish']:<7} "
               f"{r['cardmarket_eur']:>8.2f} {money(r['tcgplayer_usd'])} {money(r['manapool_usd'])} {money(r['cardkingdom_buy_usd'])} "
               f"{r['landed_cost_usd']:>8.2f} {r['profit_usd']:>9.2f} {r['roi_pct']:>5.0f}%  {r['sold_on']}")
@@ -442,6 +460,9 @@ def main():
     g.add_argument("--set", nargs="+", help="only these set codes, e.g. --set mh3 otj")
     g.add_argument("--rarity", nargs="+", choices=["common", "uncommon", "rare", "mythic", "special", "bonus"])
     g.add_argument("--name", default="", help="card name contains this text")
+    g.add_argument("--lang", nargs="+", choices=list(LANGS), default=d["langs"], help="card languages (default: en ja)")
+    g.add_argument("--stamps", choices=["", "hide", "only"], default=d["stamps"],
+                   help="promo-stamped printings (prerelease date stamp, promo pack / event stamp): hide them, or only show them")
     g.add_argument("--min-mp-qty", type=int, help="liquidity: min copies listed on Mana Pool")
     g.add_argument("--max-edhrec", type=int, help="demand: only cards with EDHREC rank <= this")
     g.add_argument("--max-disagree", type=float, help="drop cards whose TCGplayer and Mana Pool prices differ by more than this factor, e.g. 1.5")
@@ -485,7 +506,7 @@ def main():
         "min_usd": a.min_usd, "max_usd": a.max_usd, "min_profit": a.min_profit,
         "min_roi": a.min_roi, "max_ratio": a.max_ratio,
         "finishes": list(FINISHES) if a.finish == "all" else [a.finish],
-        "sets": a.set, "rarities": a.rarity, "q": a.name,
+        "sets": a.set, "rarities": a.rarity, "q": a.name, "langs": a.lang, "stamps": a.stamps,
         "min_mp_qty": a.min_mp_qty, "max_edhrec": a.max_edhrec, "max_disagree": a.max_disagree,
         "buy_markup": a.buy_markup, "per_card_cost": a.per_card_cost, "duty": a.duty,
         "storefront": a.store, "sell_mode": a.mode, "sell_at": a.sell_at,

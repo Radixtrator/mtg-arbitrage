@@ -25,8 +25,8 @@ MAX_SUGGEST_LINES = 60  # difflib is slow-ish; only suggest for the first N unkn
 
 # ---------------------------------------------------------------- params
 
-_LIST = {"finishes", "sets", "rarities"}
-_STR = {"q", "sort", "sell_mode", "storefront"}
+_LIST = mtg_arb.LIST_PARAMS
+_STR = mtg_arb.STR_PARAMS
 
 
 def normalize_params(raw):

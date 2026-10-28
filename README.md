@@ -74,6 +74,12 @@ User data (buy list and history) lives in `data/` and the price downloads in `.c
 
 ## Filters
 - Finish, rarity, sets and card name
+- **Language:** English and/or Japanese.
+  - Japanese covers printings that exist only in Japanese and have their own prices, such as the Japanese Mystical Archive (SOA), alt-art planeswalkers and Japanese promos.
+  - Japanese copies of regular printings have no separate price in any source, because Cardmarket and TCGplayer price a printing across all languages. They can't be compared here.
+- **Promo stamps:** show all, hide stamped, or only stamped printings.
+  - Prerelease date stamps, plus promo-pack and event stamps, are badged on each card.
+  - Scryfall lists stamped promos as their own printings (e.g. `106s`, `81p`), with their own prices.
 - Minimum and maximum US price, minimum profit, minimum ROI
 - **Max price ratio:** drops obviously bad data
 - **Liquidity:** minimum number of Mana Pool listings
