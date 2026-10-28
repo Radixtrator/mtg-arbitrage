@@ -12,7 +12,7 @@ MTGJSON publishes ~90 days of daily retail prices per printing:
   csv/cardIdentifiers.csv.gz (~16 MB) maps MTGJSON uuid -> scryfallId
 The JSON is never loaded whole: it is decompressed as a stream and each card's
 object is decoded on its own, so memory stays around a few hundred MB.
-Historical EUR->USD rates come from frankfurter.app (ECB; weekends carry forward).
+Historical EUR->USD rates come from frankfurter.dev (ECB; weekends carry forward).
 
 Rows are written with INSERT OR IGNORE, so real daily snapshots taken by the app
 (which also include Mana Pool prices) always win over backfilled ones.
@@ -42,7 +42,7 @@ DB = ROOT / "data" / "history.sqlite"
 BASE = "https://mtgjson.com/api/v5/"
 FILES = {"prices": "AllPrices.json.xz", "ids": "csv/cardIdentifiers.csv.gz"}
 FINISH = {"normal": "nonfoil", "foil": "foil", "etched": "etched"}
-UA = {"User-Agent": "mtg-arb/0.1"}
+UA = {"User-Agent": "mtg-arb/0.1 (+https://github.com/Radixtrator/mtg-arbitrage)"}
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS cards (
@@ -134,7 +134,7 @@ def fx_history(start, end, fallback):
     """{date: EUR->USD} for every calendar day in [start, end], carrying the last ECB rate forward."""
     rates = {}
     try:
-        url = f"https://api.frankfurter.app/{start}..{end}?from=EUR&to=USD"
+        url = f"https://api.frankfurter.dev/v1/{start}..{end}?from=EUR&to=USD"
         req = urllib.request.Request(url, headers={**UA, "Accept": "application/json"})
         with urllib.request.urlopen(req, timeout=60) as r:
             rates = {d: v["USD"] for d, v in json.load(r)["rates"].items()}

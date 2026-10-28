@@ -244,6 +244,14 @@ td img.thumb { width: 34px; border-radius: 3px; vertical-align: middle; }
     </div>
     <div id="sidebarExtra"></div>
     <p class="note" id="dataInfo"></p>
+    <p class="note">Prices are daily estimates with no guarantee; always check the store before buying.
+      Card data and images: <a href="https://scryfall.com" target="_blank" rel="noopener">Scryfall</a>.
+      Price history: <a href="https://mtgjson.com" target="_blank" rel="noopener">MTGJSON</a>.
+      Price data © Cardmarket, Mana Pool, Card Kingdom.
+      EUR→USD: ECB reference rate via <a href="https://frankfurter.dev" target="_blank" rel="noopener">Frankfurter</a>.</p>
+    <p class="note">MTG Arbitrage is unofficial Fan Content permitted under the
+      <a href="https://company.wizards.com/en/legal/fancontentpolicy" target="_blank" rel="noopener">Fan Content Policy</a>.
+      Not approved/endorsed by Wizards. Portions of the materials used are property of Wizards of the Coast. ©Wizards of the Coast LLC.</p>
   </aside>
 
   <main>
@@ -314,11 +322,14 @@ async function pump() {
   if (sfBusy || !sfQueue.length) return;
   sfBusy = true;
   const {url, opts, resolve, reject} = sfQueue.shift();
+  let wait = 110;
   try {
     const r = await fetch(url, {...opts, headers: {Accept: "application/json", ...(opts?.headers || {})}});
-    resolve(await r.json());
+    if (r.status === 429) {  // Scryfall requires backing off; retry this request after 30 s
+      sfQueue.unshift({url, opts, resolve, reject}); wait = 30000;
+    } else resolve(await r.json());
   } catch (e) { reject(e); }
-  setTimeout(() => { sfBusy = false; pump(); }, 110);
+  setTimeout(() => { sfBusy = false; pump(); }, wait);
 }
 async function api(path, opts = {}) {
   const init = {...opts};

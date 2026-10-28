@@ -24,7 +24,7 @@ import sys
 import urllib.request
 from pathlib import Path
 
-UA = {"User-Agent": "mtg-arb/0.1", "Accept": "application/json"}
+UA = {"User-Agent": "mtg-arb/0.1 (+https://github.com/Radixtrator/mtg-arbitrage)", "Accept": "application/json"}
 CACHE = Path(__file__).resolve().parent / ".cache"
 MANAPOOL_URL = "https://manapool.com/api/v1/prices/singles"
 CARDKINGDOM_URL = "https://api.cardkingdom.com/api/v2/pricelist"
@@ -191,7 +191,7 @@ def iter_cards(path):
 
 def get_fx():
     try:
-        data = http_json("https://api.frankfurter.app/latest?from=EUR&to=USD")
+        data = http_json("https://api.frankfurter.dev/v1/latest?from=EUR&to=USD")
         return float(data["rates"]["USD"])
     except Exception as e:  # noqa: BLE001
         sys.exit(f"Could not fetch EUR->USD rate ({e}); pass --fx manually.")
@@ -239,6 +239,8 @@ def load_candidates(path, manapool=None, cardkingdom=None, cmguide=None):
             "released_at": c.get("released_at", ""),
             "eur": eur,
             "tcg": tcg,
+            # TCGplayer market for every finish of this printing, so the UI can warn about foil/non-foil mix-ups
+            "tcg_finishes": {f: float(v) for f, (_, k) in FINISHES.items() if (v := (c.get("prices") or {}).get(k))},
             "mp": mpp,
             "mp_qty": mp.get("qty", 0),
             "ck": ckp,
@@ -431,7 +433,7 @@ def main():
     g.add_argument("--max-edhrec", type=int, help="demand: only cards with EDHREC rank <= this")
     g.add_argument("--max-disagree", type=float, help="drop cards whose TCGplayer and Mana Pool prices differ by more than this factor, e.g. 1.5")
     c = p.add_argument_group("cost model")
-    c.add_argument("--fx", type=float, help="EUR->USD rate (default: live ECB rate via frankfurter.app)")
+    c.add_argument("--fx", type=float, help="EUR->USD rate (default: live ECB rate via frankfurter.dev)")
     c.add_argument("--buy-markup", type=float, default=d["buy_markup"],
                    help="%% paid above Cardmarket trend (trend is an average; cheapest NM copies may differ)")
     c.add_argument("--per-card-cost", type=float, default=d["per_card_cost"],

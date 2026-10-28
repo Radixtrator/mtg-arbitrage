@@ -24,7 +24,7 @@ All sources are matched on the **Scryfall card ID**, which identifies one exact 
 | [Mana Pool prices](https://manapool.com/api/v1/prices/singles) | Mana Pool market $ and number of listings | daily cache |
 | [Card Kingdom pricelist](https://api.cardkingdom.com/api/v2/pricelist) | Card Kingdom's **buylist** cash offer | daily cache |
 | [Cardmarket price guide](https://downloads.s3.cardmarket.com/productCatalog/priceGuide/price_guide_1.json) | Cardmarket trend € for printings Scryfall has no price for | daily cache |
-| [frankfurter.app](https://www.frankfurter.app) | EUR→USD rate (ECB) | each start |
+| [Frankfurter](https://frankfurter.dev) | EUR→USD rate (ECB reference rate) | each start |
 
 Some printings exist as two cards on Scryfall but one product on Cardmarket. Examples are Secret Lair rainbow foils (`#1596★`), 7th–9th Edition foils and Warhammer 40K surge foils. Their Cardmarket price is the foil price of the regular product, and the card panel says so.
 
@@ -48,9 +48,7 @@ All of these numbers can be changed in the sidebar or with CLI flags. Import dut
 ## Tabs
 - **Scanner:** every opportunity, in a grid or table, with card images.
   - Click a card to see live Scryfall prices, a price history chart and links to each store.
-  - **TCGplayer right now:** the live market price and median listing for both foil and non-foil, and the profit if you sell at the median listing.
-    - It warns when the two finishes differ a lot, or when listings are far from the market price.
-    - Individual listings and recent sales can't be fetched, because TCGplayer blocks outside requests for them. The button opens TCGplayer's page filtered to the right finish instead.
+  - **TCGplayer by finish:** the TCGplayer market price of every finish of the printing, taken from the daily Scryfall data. It warns when foil and non-foil prices differ a lot, and links to TCGplayer's listings filtered to the right finish. The app never contacts TCGplayer directly, because their terms ban automated price collection.
   - Store links open filtered to English and the card's finish.
 - **Buy list:** star cards from any tab and track each lot through *planned → ordered → received → listed → sold*.
   - You can edit quantity, condition, actual buy and sell prices, and the order reference.
@@ -113,7 +111,7 @@ On a server, the app re-downloads prices every day at `MTG_REFRESH_HOUR` UTC (de
 mtg_arb.py           data loading, cost model, scoring, CLI
 app.py               local web server and plugin loader
 ui/index.html        scanner UI and the window.MTG plugin API
-features/*.py        server plugins: ROUTES + on_load (buylist, history, planner, listcheck, tcglive)
+features/*.py        server plugins: ROUTES + on_load (buylist, history, planner, listcheck)
 ui/features/*.js     matching UI plugins (tabs, card actions, drawer sections)
 tools/backfill_mtgjson.py   price-history backfill (also runs standalone)
 ```
@@ -125,3 +123,23 @@ To add a feature, drop a module in `features/` and a script in `ui/features/`. `
 - **Thin markets:** "Market" prices for rare foils and promos can come from very few sales. The disagreement filter and the Card Kingdom buylist price are good sanity checks.
 - **Card Kingdom:** its buylist offers are capped (`qty_buying`) and change daily.
 - **US customs:** carrying cards in for resale is technically commercial goods. Declare them as required.
+
+## Data sources, terms and credits
+This is a personal tool: run it yourself, for yourself. Every data source has its own terms, and you are bound by them when you run it.
+- **Downloads:** each source is fetched at most once a day, with a User-Agent that names this repo.
+- **Sharing:** never redistribute the downloaded data or make an instance publicly reachable. Keep hosted instances behind `MTG_PASSWORD`. `data/` and `.cache/` are gitignored for this reason.
+- **Prices:** these are daily estimates with no guarantee. Check the store before buying.
+
+| Source | Credit / notes |
+|---|---|
+| [Scryfall](https://scryfall.com) | Card data, images and the Cardmarket/TCGplayer prices. Used under the [API guidelines](https://scryfall.com/docs/api). Not affiliated with or endorsed by Scryfall. |
+| [MTGJSON](https://mtgjson.com) | Price history backfill. MIT licensed. |
+| [Cardmarket](https://www.cardmarket.com/en/Magic/Data/Price-Guide) | Price data © Cardmarket. Uses the public daily price guide. If you resell regularly, Cardmarket's terms may require a commercial account. |
+| [Mana Pool](https://manapool.com/api/docs/v1) | Public prices endpoint. |
+| [Card Kingdom](https://www.cardkingdom.com) | The buylist pricelist is not officially documented, and Card Kingdom's terms restrict automated data gathering. Use at your own discretion. |
+| [Frankfurter](https://frankfurter.dev) | EUR→USD. Source: European Central Bank reference rates. |
+
+MTG Arbitrage is unofficial Fan Content permitted under the [Fan Content Policy](https://company.wizards.com/en/legal/fancontentpolicy). Not approved/endorsed by Wizards. Portions of the materials used are property of Wizards of the Coast. ©Wizards of the Coast LLC.
+
+## License
+[MIT](LICENSE)
