@@ -13,11 +13,12 @@ copies are already ordered), the new lot gets key "<id>:<finish>#2", "#3", ... s
 
 Current prices added on GET (from state.cands, None if the printing dropped out of the data):
   eur (Cardmarket trend), tcg (TCGplayer market), mp (Mana Pool), mp_qty, ck (Card Kingdom cash
-  buylist), ck_qty, priced (bool), plus cardkingdom_url / image_normal / scryfall_url / rarity.
-Snapshot when added: cardmarket_eur, tcgplayer_usd, manapool_usd, cardkingdom_buy_usd, sold_on,
-sell_price_usd and net_sale_usd (for sold_on="offer" rows from the list checker these are the
+  buylist), ck_qty, cc (CardConduit buylist), priced (bool), plus cardkingdom_url / cardconduit_url /
+  image_normal / scryfall_url / rarity.
+Snapshot when added: cardmarket_eur, tcgplayer_usd, manapool_usd, cardkingdom_buy_usd, cardconduit_buy_usd,
+sold_on, sell_price_usd and net_sale_usd (for sold_on="offer" rows from the list checker these are the
 buyer's offer and its net, used for expected profit instead of a live store price).
-sell_via (editable, "" = follow the sidebar storefront): tcgplayer | manapool | cardkingdom | credit | local.
+sell_via (editable, "" = follow the sidebar storefront): tcgplayer | manapool | cardkingdom | cardconduit | credit | local.
 """
 import json
 import os
@@ -27,12 +28,12 @@ import time
 STATUSES = ["planned", "ordered", "received", "listed", "sold"]
 CONDITIONS = ["M", "NM", "EX", "GD", "LP", "PL", "PO"]
 CARD_FIELDS = ["id", "name", "set", "set_name", "number", "finish", "image_small",
-               "cardmarket_url", "tcgplayer_url", "manapool_url", "cardkingdom_url"]
+               "cardmarket_url", "tcgplayer_url", "manapool_url", "cardkingdom_url", "cardconduit_url"]
 EDITABLE = {"qty", "condition", "status", "actual_buy_eur", "actual_sell_usd", "order_ref",
             "notes", "sold_on", "sell_via", "cardmarket_eur", "tcgplayer_usd", "manapool_usd",
-            "cardkingdom_buy_usd", "sell_price_usd", "net_sale_usd"}
-SOLD_ON = ("tcgplayer", "manapool", "cardkingdom", "offer")
-SELL_VIA = ("", "tcgplayer", "manapool", "cardkingdom", "offer", "credit", "local")  # "" = follow sidebar
+            "cardkingdom_buy_usd", "cardconduit_buy_usd", "sell_price_usd", "net_sale_usd"}
+SOLD_ON = ("tcgplayer", "manapool", "cardkingdom", "cardconduit", "offer")
+SELL_VIA = ("", "tcgplayer", "manapool", "cardkingdom", "cardconduit", "offer", "credit", "local")  # "" = follow sidebar
 
 _lock = threading.RLock()
 _index = {}  # "<id>:<finish>" -> candidate dict from state.cands
@@ -98,8 +99,10 @@ def _enrich(item):
         "mp_qty": c["mp_qty"] if c else None,
         "ck": c.get("ck") if c else None,
         "ck_qty": c.get("ck_qty") if c else None,
+        "cc": c.get("cc") if c else None,
         "priced": bool(c),
         "cardkingdom_url": (c or {}).get("cardkingdom_url") or item.get("cardkingdom_url", ""),
+        "cardconduit_url": (c or {}).get("cardconduit_url") or item.get("cardconduit_url", ""),
         "cardmarket_url": (c or {}).get("cardmarket_url") or item.get("cardmarket_url", ""),
         "tcgplayer_url": (c or {}).get("tcgplayer_url") or item.get("tcgplayer_url", ""),
         "image_normal": (c or {}).get("image_normal", ""),
@@ -134,6 +137,7 @@ def _new_item(row, qty, existing_keys):
         "tcgplayer_usd": pick("tcgplayer_usd", "tcg") or c.get("tcg"),
         "manapool_usd": pick("manapool_usd", "mp") or c.get("mp"),
         "cardkingdom_buy_usd": pick("cardkingdom_buy_usd", "ck") or c.get("ck"),
+        "cardconduit_buy_usd": pick("cardconduit_buy_usd", "cc") or c.get("cc"),
         "sold_on": row.get("sold_on") if row.get("sold_on") in SOLD_ON
                    else ("tcgplayer" if (row.get("tcgplayer_usd") or c.get("tcg")) else "manapool"),
         "sell_price_usd": pick("sell_price_usd"),
@@ -202,7 +206,7 @@ def _clean(field, v):
             raise ValueError(f"condition must be one of {CONDITIONS}")
         return v
     if field in ("actual_buy_eur", "actual_sell_usd", "cardmarket_eur", "tcgplayer_usd", "manapool_usd",
-                 "cardkingdom_buy_usd", "sell_price_usd", "net_sale_usd"):
+                 "cardkingdom_buy_usd", "cardconduit_buy_usd", "sell_price_usd", "net_sale_usd"):
         v = _num(v)
         return round(v, 2) if v is not None else None
     if field == "sold_on":

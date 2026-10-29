@@ -10,7 +10,7 @@
     {k: "mp", label: "Mana Pool", color: "var(--c-mp)"},
     {k: "ck", label: "CK buylist", color: "var(--c-ck, #0c8599)"},
   ];
-  const STORE = {tcgplayer: "TCGplayer", manapool: "Mana Pool", cardkingdom: "Card Kingdom buylist"};
+  const STORE = {tcgplayer: "TCGplayer", manapool: "Mana Pool", cardkingdom: "Card Kingdom buylist", cardconduit: "CardConduit buylist"};
   const pct = v => v == null ? "–" : v > 999 ? "+999%+" : `${v > 0 ? "+" : v < 0 ? "−" : ""}${Math.abs(v).toFixed(Math.abs(v) < 10 ? 1 : 0)}%`;
   const signed = v => v == null ? "–" : (v < 0 ? "−" : "+") + usd(Math.abs(v));
   const money = v => v == null ? "–" : v < 0 ? "−" + usd(-v) : usd(v);
@@ -153,7 +153,8 @@
     const span = Math.round((Date.parse(s.last) - Date.parse(s.first)) / 864e5) + 1;
     box.querySelector(".hx-line").innerHTML =
       `Spread has existed <b class="${s.days_ok / s.days >= 0.7 ? "pos" : s.days_ok / s.days < 0.3 ? "neg" : ""}">${s.days_ok} of the last ${s.days} days</b>` +
-      ` with data${span > s.days ? ` (${span}-day span)` : ""} — profitable selling on ${esc(STORE[s.store] || s.store)} under your current filters.`;
+      ` with data${span > s.days ? ` (${span}-day span)` : ""} — profitable selling on ${esc(STORE[s.store] || s.store)} under your current filters.` +
+      (s.store !== store ? ` <span class="muted">(no ${esc(STORE[store] || store)} history; shown for TCGplayer)</span>` : "");
   });
 
   // ---------------------------------------------------------------- sparkline
@@ -196,8 +197,8 @@
         <div class="stat"><div class="v" id="hxHist">–</div><div class="k">Days of history</div></div>
       </div>
       <div class="hx-bf panel" id="hxBf" hidden></div>
-      <p class="note" style="margin-top:0">Spread = US price on the store you sell to − Cardmarket price in USD at that day's ECB rate.
-        "Profitable days" counts days the card passed your current min profit / ROI filters.</p>
+      <p class="note" style="margin-top:0">Spread = US price on the store you sell to − Cardmarket price in USD at that day's ECB rate
+        (TCGplayer for cards sold to CardConduit, which has no price history). "Profitable days" counts days the card passed your current min profit / ROI filters.</p>
       <div id="hxResults"><div class="empty">Loading…</div></div>
       <div class="more"><button class="btn" id="hxMore" hidden>Show more</button></div>`;
     s.querySelector("#hxOrder").addEventListener("click", e => {

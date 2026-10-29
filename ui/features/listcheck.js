@@ -6,7 +6,8 @@
   const {esc, usd, eur, store, api, toast} = M;
   const KEY_TEXT = "listcheck.text", KEY_ONLY = "listcheck.only", KEY_SORT = "listcheck.sort";
   const VIA = {tcgplayer: ["TCG", "tcg", "TCGplayer market"], manapool: ["MP", "mp", "Mana Pool market"],
-               cardkingdom: ["CK", "ck", "Card Kingdom buylist"], offer: ["Offer", "lc-offer", "Price offered in your list"]};
+               cardkingdom: ["CK", "ck", "Card Kingdom buylist"], cardconduit: ["CC", "cc", "CardConduit buylist"],
+               offer: ["Offer", "lc-offer", "Price offered in your list"]};
   const PLACEHOLDER = `4 Lightning Bolt
 1 Ragavan, Nimble Pilferer (MH2) 138 *F*
 2x Fable of the Mirror-Breaker

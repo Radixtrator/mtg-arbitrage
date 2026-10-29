@@ -9,14 +9,14 @@
   --bg: #f5f4f0; --panel: #ffffff; --panel-2: #efede7; --text: #1d1c1a; --muted: #6b6860;
   --border: #dcd9d0; --accent: #2f6fde; --pos: #1a7f4b; --neg: #c0392b; --warn: #b7791f; --chip: #e7e4dc;
   --shadow: 0 1px 2px rgba(0,0,0,.06), 0 4px 16px rgba(0,0,0,.06);
-  --c-cm: #2f6fde; --c-tcg: #d9480f; --c-mp: #7048e8; --c-ck: #0c8599;
+  --c-cm: #2f6fde; --c-tcg: #d9480f; --c-mp: #7048e8; --c-ck: #0c8599; --c-cc: #2b8a3e;
 }
 @media (prefers-color-scheme: dark) {
   :root {
     --bg: #131416; --panel: #1c1d21; --panel-2: #24262b; --text: #ebe9e4; --muted: #9a978f;
     --border: #2f3137; --accent: #6b9cff; --pos: #4cc38a; --neg: #ff7a6b; --warn: #f0b429; --chip: #2a2c32;
     --shadow: 0 1px 2px rgba(0,0,0,.3), 0 4px 16px rgba(0,0,0,.3);
-    --c-cm: #6b9cff; --c-tcg: #ff8a4c; --c-mp: #a98bff; --c-ck: #3bc9db;
+    --c-cm: #6b9cff; --c-tcg: #ff8a4c; --c-mp: #a98bff; --c-ck: #3bc9db; --c-cc: #69db7c;
   }
 }
 * { box-sizing: border-box; }
@@ -60,6 +60,7 @@ summary { cursor: pointer; font-weight: 600; font-size: 13px; margin-bottom: 8px
 .seg.grid2 button { padding: 6px 4px; border-left: 0; }
 .seg.grid2 button:nth-child(even) { border-left: 1px solid var(--border); }
 .seg.grid2 button:nth-child(n+3) { border-top: 1px solid var(--border); }
+.seg.grid2 button:last-child:nth-child(odd) { grid-column: 1 / -1; }
 
 main { padding: 0 20px 40px; min-width: 0; }
 nav.tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--border); margin: 0 -20px 14px; padding: 0 20px; position: sticky; top: 0; background: var(--bg); z-index: 5; overflow-x: auto; }
@@ -93,7 +94,7 @@ nav.tabs .count { background: var(--chip); border-radius: 999px; padding: 0 6px;
 .prices { display: flex; justify-content: space-between; margin-top: 6px; font-variant-numeric: tabular-nums; font-size: 12.5px; gap: 4px; }
 .prices .via { font-weight: 650; text-decoration: underline; text-decoration-thickness: 2px; text-underline-offset: 3px; }
 .profit { display: flex; justify-content: space-between; margin-top: 4px; font-weight: 650; color: var(--pos); font-variant-numeric: tabular-nums; }
-.cm { color: var(--c-cm); } .tcg { color: var(--c-tcg); } .mp { color: var(--c-mp); } .ck { color: var(--c-ck); }
+.cm { color: var(--c-cm); } .tcg { color: var(--c-tcg); } .mp { color: var(--c-mp); } .ck { color: var(--c-ck); } .cc { color: var(--c-cc); }
 .prices { flex-wrap: wrap; }
 
 table.t { width: 100%; border-collapse: collapse; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
@@ -152,6 +153,7 @@ td img.thumb { width: 34px; border-radius: 3px; vertical-align: middle; }
         <button data-v="tcgplayer" class="on">TCGplayer</button>
         <button data-v="manapool">Mana Pool</button>
         <button data-v="cardkingdom" title="Sell to Card Kingdom's buylist: a guaranteed offer, no fees">CK buylist</button>
+        <button data-v="cardconduit" title="Sell to CardConduit's buylist; its service fee is deducted. Prices are estimates until you pull a card's real price in its detail panel">CardConduit</button>
         <button data-v="best" title="Whichever nets more per card">Best</button>
       </div>
     </fieldset>
@@ -178,6 +180,12 @@ td img.thumb { width: 34px; border-radius: 3px; vertical-align: middle; }
         <label class="f mpfee">MP processing %<input type="number" id="mp_processing" step="0.1"></label>
         <label class="f mpfee">MP fixed $<input type="number" id="mp_fixed" step="0.05"></label>
       </div>
+      <label class="f cconly" id="ccWrap" style="margin-top:8px" title="CardConduit's fee depends on how you send the cards">CardConduit service
+        <select id="cc_service">
+          <option value="sorted">Sorted (2% fee)</option>
+          <option value="curated">Curated (5% fee)</option>
+          <option value="standard">Standard (10% + $0.03/card)</option>
+        </select></label>
     </fieldset>
 
     <fieldset>
@@ -312,7 +320,8 @@ const NUM = ["min_usd","max_usd","min_profit","min_roi","max_ratio","min_mp_qty"
              "per_card_cost","duty","sell_at","tcg_fee","tcg_fixed","mp_fee","mp_fee_cap","mp_processing","mp_fixed","credit_pct","ck_credit_bonus"];
 const PAGE = 120;
 const STAMP_LABEL = {date: "Prerelease date stamp", promo: "Promo stamp (promo pack / event)"};
-const STORE_LABEL = {tcgplayer: "TCGplayer", manapool: "Mana Pool", cardkingdom: "Card Kingdom", offer: "Offered price"};
+const STORE_LABEL = {tcgplayer: "TCGplayer", manapool: "Mana Pool", cardkingdom: "Card Kingdom", cardconduit: "CardConduit", offer: "Offered price"};
+const CC_SERVICES = {sorted: [2, 0], curated: [5, 0], standard: [10, 0.03]};  // mirrors mtg_arb.CC_SERVICES
 const store = {
   get(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch { return d; } },
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
@@ -401,6 +410,11 @@ window.MTG = {
   netSale(price, storeName, p = readFilters()) {
     const n = k => parseFloat(p[k]) || 0;
     if (storeName === "cardkingdom") return p.sell_mode === "credit" ? price * (1 + n("ck_credit_bonus") / 100) : price;
+    if (storeName === "cardconduit") {  // cash buylist minus the service fee; no store-credit option
+      if (p.sell_mode === "market") return price;
+      const [pct, perCard] = CC_SERVICES[p.cc_service] || CC_SERVICES.sorted;
+      return price * (1 - pct / 100) - perCard;
+    }
     if (p.sell_mode === "market") return price;
     if (p.sell_mode === "credit") return price * n("credit_pct") / 100;
     const sale = price * n("sell_at") / 100;
@@ -424,6 +438,7 @@ function readFilters() {
   p.rarities = [...document.querySelectorAll("#rarities input:checked")].map(i => i.value).join(",");
   p.langs = [...document.querySelectorAll("#langs input:checked")].map(i => i.value).join(",");
   p.stamps = $("#stamps").value;
+  p.cc_service = $("#cc_service").value;
   p.sets = sets.join(",");
   p.storefront = storefront;
   p.sell_mode = sellMode;
@@ -439,6 +454,7 @@ function writeFilters(p) {
   const lng = (p.langs ?? defaults.langs.join(",")).split(",");
   document.querySelectorAll("#langs input").forEach(i => i.checked = lng.includes(i.value));
   $("#stamps").value = p.stamps || "";
+  $("#cc_service").value = p.cc_service || defaults.cc_service;
   sets = (p.sets || "").split(",").filter(Boolean);
   renderSetChips();
   storefront = p.storefront || "tcgplayer"; sellMode = p.sell_mode || "fees";
@@ -448,7 +464,7 @@ function defaultFilters() {
   const p = {};
   for (const k of NUM) p[k] = k === "fx" ? meta.fx : (defaults[k] ?? "");
   p.finishes = defaults.finishes.join(","); p.rarities = ""; p.sets = ""; p.q = ""; p.sort = "profit";
-  p.langs = defaults.langs.join(","); p.stamps = defaults.stamps;
+  p.langs = defaults.langs.join(","); p.stamps = defaults.stamps; p.cc_service = defaults.cc_service;
   p.storefront = defaults.storefront; p.sell_mode = defaults.sell_mode;
   return p;
 }
@@ -460,8 +476,9 @@ function syncSegs() {
   document.querySelectorAll(".tcgfee").forEach(el => el.hidden = !["tcgplayer", "best"].includes(storefront));
   document.querySelectorAll(".mpfee").forEach(el => el.hidden = !["manapool", "best"].includes(storefront));
   document.querySelectorAll(".ckonly").forEach(el => el.hidden = !["cardkingdom", "best"].includes(storefront));
-  document.querySelectorAll(".ckhide").forEach(el => el.hidden = storefront === "cardkingdom");
-  $("#feesWrap").hidden = sellMode !== "fees" || storefront === "cardkingdom";
+  document.querySelectorAll(".ckhide").forEach(el => el.hidden = ["cardkingdom", "cardconduit"].includes(storefront));
+  $("#feesWrap").hidden = sellMode !== "fees" || ["cardkingdom", "cardconduit"].includes(storefront);
+  $("#ccWrap").hidden = sellMode === "market" || !["cardconduit", "best"].includes(storefront);
   $("#profitLbl").textContent = {fees: "Profit if all sell", market: "Gain at market value", credit: "Credit gain if all traded"}[sellMode];
 }
 $("#storefront").addEventListener("click", e => { const v = e.target.dataset.v; if (v) { storefront = v; syncSegs(); search(); } });
@@ -511,7 +528,8 @@ function priceLine(r) {
   return `<span class="cm">CM ${eur(r.cardmarket_eur)}</span>
     ${r.tcgplayer_usd != null ? `<span class="tcg${v("tcgplayer")}">TCG ${usd(r.tcgplayer_usd)}</span>` : ""}
     ${r.manapool_usd != null ? `<span class="mp${v("manapool")}">MP ${usd(r.manapool_usd)}</span>` : ""}
-    ${r.cardkingdom_buy_usd != null ? `<span class="ck${v("cardkingdom")}" title="Card Kingdom buylist (cash)">CK ${usd(r.cardkingdom_buy_usd)}</span>` : ""}`;
+    ${r.cardkingdom_buy_usd != null ? `<span class="ck${v("cardkingdom")}" title="Card Kingdom buylist (cash)">CK ${usd(r.cardkingdom_buy_usd)}</span>` : ""}
+    ${r.cardconduit_buy_usd != null ? `<span class="cc${v("cardconduit")}" title="CardConduit buylist (NM, before service fee)${r.cardconduit_estimated ? " — estimate; pull the real price in the card panel" : ""}">CC ${r.cardconduit_estimated ? "~" : ""}${usd(r.cardconduit_buy_usd)}</span>` : ""}`;
 }
 function actionButtons(r, i) {
   return cardActions.map((a, j) => {
@@ -548,14 +566,14 @@ function render() {
   } else {
     el.innerHTML = `<div class="tablewrap"><table class="t"><thead><tr>
       ${cardActions.length ? "<th></th>" : ""}<th></th><th data-sort="name">Card</th><th>Set</th><th>Finish</th>
-      <th class="n" data-sort="cm">CM €</th><th class="n">TCG $</th><th class="n">MP $</th><th class="n" title="Card Kingdom buylist, cash">CK buy $</th><th>Via</th>
+      <th class="n" data-sort="cm">CM €</th><th class="n">TCG $</th><th class="n">MP $</th><th class="n" title="Card Kingdom buylist, cash">CK buy $</th><th class="n" title="CardConduit buylist, NM, before service fee (~ = estimate)">CC buy $</th><th>Via</th>
       <th class="n" data-sort="ratio">Ratio</th><th class="n">Cost $</th><th class="n">Net $</th><th class="n" data-sort="profit">Profit $</th><th class="n" data-sort="roi">ROI</th>
       <th class="n" title="Mana Pool listings">MP qty</th><th class="n" title="EDHREC rank">EDHREC</th>
       </tr></thead><tbody>${rows.map((r, i) => `<tr data-i="${i}">
         ${cardActions.length ? `<td><div style="display:flex;gap:3px">${actionButtons(r, i).replaceAll('class="act', 'class="btn sm act-t')}</div></td>` : ""}
         <td>${r.image_small ? `<img class="thumb" loading="lazy" src="${esc(r.image_small)}" data-big="${esc(r.image_normal)}" alt="">` : ""}</td>
         <td>${esc(r.name)}${r.finish !== "nonfoil" ? " ✦" : ""}${r.lang === "ja" ? ` <span class="muted">JP</span>` : ""}${r.stamp ? ` <span class="muted" title="${STAMP_LABEL[r.stamp]}">stamped</span>` : ""}</td><td title="${esc(r.set_name)}">${esc(r.set)} #${esc(r.number)}</td><td>${r.finish}</td>
-        <td class="n">${eur(r.cardmarket_eur)}</td><td class="n">${usd(r.tcgplayer_usd)}</td><td class="n">${usd(r.manapool_usd)}</td><td class="n">${usd(r.cardkingdom_buy_usd)}</td>
+        <td class="n">${eur(r.cardmarket_eur)}</td><td class="n">${usd(r.tcgplayer_usd)}</td><td class="n">${usd(r.manapool_usd)}</td><td class="n">${usd(r.cardkingdom_buy_usd)}</td><td class="n">${r.cardconduit_estimated && r.cardconduit_buy_usd != null ? "~" : ""}${usd(r.cardconduit_buy_usd)}</td>
         <td>${STORE_LABEL[r.sold_on]}${r.us_disagree > 1.5 ? ` <span class="warn" title="TCGplayer and Mana Pool disagree by ${r.us_disagree}×">⚠</span>` : ""}</td>
         <td class="n">${r.ratio.toFixed(2)}×</td><td class="n">${usd(r.landed_cost_usd)}</td><td class="n">${usd(r.net_sale_usd)}</td>
         <td class="n pos">${usd(r.profit_usd)}</td><td class="n">${Math.round(r.roi_pct)}%</td>
@@ -599,6 +617,7 @@ async function openDrawer(r) {
       <span class="tcg">TCGplayer market</span><span>${usd(r.tcgplayer_usd)}</span><span id="liveUsd">…</span>
       <span class="mp">Mana Pool market</span><span>${usd(r.manapool_usd)}</span><span class="muted">${r.mp_qty ? r.mp_qty + " listed" : ""}</span>
       <span class="ck">Card Kingdom buylist</span><span>${usd(r.cardkingdom_buy_usd)}</span><span class="muted">${r.ck_qty ? "buying " + r.ck_qty : ""}</span>
+      <span class="cc">CardConduit buylist</span><span>${r.cardconduit_estimated && r.cardconduit_buy_usd != null ? "~" : ""}${usd(r.cardconduit_buy_usd)}</span><span class="muted">${r.cardconduit_estimated ? "estimate" : "pulled"}</span>
       <span>Landed cost</span><span>${usd(r.landed_cost_usd)}</span><span></span>
       <span>${sellMode === "credit" ? "Store credit" : sellMode === "market" ? "Market value" : "Net after fees"} (${via})</span><span>${usd(r.net_sale_usd)}</span><span></span>
       <span><b>Profit</b></span><span class="pos"><b>${usd(r.profit_usd)} (${Math.round(r.roi_pct)}%)</b></span><span id="liveProfit"></span>
@@ -609,6 +628,7 @@ async function openDrawer(r) {
       ${r.tcgplayer_url ? `<a class="btn" target="_blank" rel="noopener" href="${esc(r.tcgplayer_url)}">TCGplayer</a>` : ""}
       ${r.manapool_url ? `<a class="btn" target="_blank" rel="noopener" href="${esc(r.manapool_url)}">Mana Pool</a>` : ""}
       ${r.cardkingdom_url ? `<a class="btn" target="_blank" rel="noopener" href="${esc(r.cardkingdom_url)}">Card Kingdom</a>` : ""}
+      ${r.cardconduit_url ? `<a class="btn" target="_blank" rel="noopener" href="${esc(r.cardconduit_url)}" title="CardConduit has no per-card pages; search for the card there">CardConduit</a>` : ""}
       <a class="btn" target="_blank" rel="noopener" href="${esc(r.scryfall_url)}">Scryfall</a>
     </div>
     <div id="dSections"></div>
@@ -635,7 +655,7 @@ async function openDrawer(r) {
     $("#liveEur").innerHTML = isNaN(le) ? "–" : diff(eur(le), le, r.cardmarket_eur, true);
     $("#liveUsd").innerHTML = isNaN(lu) ? "–" : diff(usd(lu), lu, r.tcgplayer_usd, false);
     if (!isNaN(le)) {
-      const price = r.sold_on === "tcgplayer" ? (isNaN(lu) ? r.tcgplayer_usd : lu) : r.sold_on === "manapool" ? r.manapool_usd : r.cardkingdom_buy_usd;
+      const price = r.sold_on === "tcgplayer" ? (isNaN(lu) ? r.tcgplayer_usd : lu) : r.sold_on === "manapool" ? r.manapool_usd : r.sold_on === "cardconduit" ? r.cardconduit_buy_usd : r.cardkingdom_buy_usd;
       const landed = MTG.landedCost(le);
       const pr = (r.sold_on === "offer" ? r.net_sale_usd : MTG.netSale(price, r.sold_on)) - landed;
       $("#liveProfit").innerHTML = `<b class="${pr >= 0 ? "pos" : "neg"}">${usd(pr)} (${Math.round(pr / landed * 100)}%)</b>`;

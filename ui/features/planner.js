@@ -7,7 +7,8 @@
   const SKEY = "planner";
   const DEF = {budget_eur: 500, max_cards: 100, max_per_card: 1, max_per_name: 2,
                max_share_per_card: "", objective: "profit", exclude_buylist: true};
-  const STORE = {tcgplayer: ["TCGplayer", "tcg"], manapool: ["Mana Pool", "mp"], cardkingdom: ["Card Kingdom", "ck"]};
+  const STORE = {tcgplayer: ["TCGplayer", "tcg"], manapool: ["Mana Pool", "mp"], cardkingdom: ["Card Kingdom", "ck"],
+                 cardconduit: ["CardConduit", "cc"]};
   const MODE = {fees: "after fees", market: "market value", credit: "store credit"};
   let opts = {...DEF, ...M.store.get(SKEY, {})};
   let plan = null, busy = false, root;

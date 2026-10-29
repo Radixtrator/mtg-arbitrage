@@ -342,14 +342,15 @@ def _score(cands, fx, params, finishes, offer):
     if offer is None:
         return mtg_arb.score(cands, fx, _relaxed(params, finishes, offer))
     orig = {(c["id"], c["finish"]): c for c in cands}
-    fake = [{**c, "tcg": offer, "mp": None, "ck": None} for c in cands]
+    fake = [{**c, "tcg": offer, "mp": None, "ck": None, "cc": None} for c in cands]
     rows = mtg_arb.score(fake, fx, _relaxed(params, finishes, offer))
     for r in rows:
         c = orig[(r["id"], r["finish"])]
         r.update(sold_on="offer", offer_usd=offer,
                  tcgplayer_usd=round(c["tcg"], 2) if c["tcg"] else None,
                  manapool_usd=round(c["mp"], 2) if c["mp"] else None,
-                 cardkingdom_buy_usd=round(c["ck"], 2) if c.get("ck") else None, us_disagree=None)
+                 cardkingdom_buy_usd=round(c["ck"], 2) if c.get("ck") else None,
+                 cardconduit_buy_usd=round(c["cc"], 2) if c.get("cc") else None, us_disagree=None)
     return rows
 
 

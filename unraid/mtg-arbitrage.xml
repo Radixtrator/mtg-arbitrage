@@ -8,7 +8,7 @@
   <Privileged>false</Privileged>
   <Support>https://github.com/Radixtrator/mtg-arbitrage/issues</Support>
   <Project>https://github.com/Radixtrator/mtg-arbitrage</Project>
-  <Overview>Finds Magic: The Gathering cards that are cheap on Cardmarket (EU) and sell for more in the US (TCGplayer, Mana Pool, Card Kingdom buylist). Prices refresh daily. Personal use: keep it behind the password.</Overview>
+  <Overview>Finds Magic: The Gathering cards that are cheap on Cardmarket (EU) and sell for more in the US (TCGplayer, Mana Pool, Card Kingdom and CardConduit buylists). Prices refresh daily. Personal use: keep it behind the password.</Overview>
   <Category>Tools:</Category>
   <WebUI>http://[IP]:[PORT:8765]/</WebUI>
   <Config Name="Web UI port" Target="8765" Default="8765" Mode="tcp" Description="Port for the web UI" Type="Port" Display="always" Required="true" Mask="false">8765</Config>

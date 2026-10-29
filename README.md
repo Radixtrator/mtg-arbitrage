@@ -24,6 +24,7 @@ All sources are matched on the **Scryfall card ID**, which identifies one exact 
 | [Mana Pool prices](https://manapool.com/api/v1/prices/singles) | Mana Pool market $ and number of listings | daily cache |
 | [Card Kingdom pricelist](https://api.cardkingdom.com/api/v2/pricelist) | Card Kingdom's **buylist** cash offer | daily cache |
 | [Cardmarket price guide + product list](https://www.cardmarket.com/en/Magic/Data/Price-Guide) | Cardmarket trend € for printings Scryfall has no price for, and each product's set for the Cardmarket links | daily cache |
+| [CardConduit](https://cardconduit.com/card-price-check) | CardConduit's **buylist** offer (NM). Estimated for every card; the real price is pulled per card on request | on demand |
 | [Frankfurter](https://frankfurter.dev) | EUR→USD rate (ECB reference rate) | each start |
 
 Some printings exist as two cards on Scryfall but one product on Cardmarket. Examples are Secret Lair rainbow foils (`#1596★`), 7th–9th Edition foils and Warhammer 40K surge foils. Their Cardmarket price is the foil price of the regular product, and the card panel says so.
@@ -41,6 +42,7 @@ profit = net − landed
 | TCGplayer | price × sell-at% × (1 − 13.25%) − $0.30 | market price | market × credit% |
 | Mana Pool | price × sell-at% − min(5%, $50) − 2.9% − $0.30 | market price | market × credit% |
 | Card Kingdom buylist | cash offer (no fees) | cash offer | cash × (1 + 30% bonus) |
+| CardConduit buylist | offer − service fee (Sorted 2%, Curated 5%, Standard 10% + $0.03) | offer | same as after fees (no credit option) |
 | Best | whichever of the above nets the most for that card | | |
 
 All of these numbers can be changed in the sidebar or with CLI flags. Import duty defaults to 0%, because the cards travel in your luggage.
@@ -146,6 +148,7 @@ This is a personal tool: run it yourself, for yourself. Every data source has it
 | [MTGJSON](https://mtgjson.com) | Price history backfill. MIT licensed. |
 | [Cardmarket](https://www.cardmarket.com/en/Magic/Data/Price-Guide) | Price data © Cardmarket. Uses the public daily price guide. If you resell regularly, Cardmarket's terms may require a commercial account. |
 | [Mana Pool](https://manapool.com/api/docs/v1) | Public prices endpoint. |
+| [CardConduit](https://cardconduit.com) | No bulk export or official API, so nothing is downloaded in bulk. Every card shows an **estimate**: Card Kingdom's buylist offer, which CardConduit matched or beat on nearly every sampled card, or else a rough 45% of the lower of TCGplayer and Mana Pool. The card panel's **Pull CardConduit price** button looks up that one card with the same search CardConduit's price-check page uses (1–2 requests). The result is kept for 3 days in `data/cardconduit.json`. |
 | [Card Kingdom](https://www.cardkingdom.com) | The buylist pricelist is not officially documented, and Card Kingdom's terms restrict automated data gathering. Use at your own discretion. |
 | [Frankfurter](https://frankfurter.dev) | EUR→USD. Source: European Central Bank reference rates. |
 

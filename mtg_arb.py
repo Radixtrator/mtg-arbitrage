@@ -9,6 +9,7 @@ Price sources, all keyed by Scryfall card id so matching is exact
   Mana Pool           /api/v1/prices/singles -> Mana Pool market price (USD)
   Card Kingdom        /api/v2/pricelist      -> Card Kingdom cash buylist offer (USD)
   Cardmarket          daily price guide      -> fills Cardmarket prices Scryfall is missing
+  CardConduit         estimated from the above; the real offer is pulled per card on request
 
 Stdlib only. Run `python3 mtg_arb.py --help` for options, or `python3 app.py`
 for the web UI.
@@ -43,7 +44,14 @@ MANAPOOL_FIELDS = {
     "foil": ("price_market_foil", "price_cents_nm_foil", "price_cents_foil"),
     "etched": ("price_cents_nm_etched", "price_cents_etched"),
 }
-STORES = {"tcgplayer": "tcg", "manapool": "mp", "cardkingdom": "ck"}
+STORES = {"tcgplayer": "tcg", "manapool": "mp", "cardkingdom": "ck", "cardconduit": "cc"}
+# CardConduit service tiers: (fee % of the buy price, fee per card in USD)
+CC_SERVICES = {"sorted": (2.0, 0.0), "curated": (5.0, 0.0), "standard": (10.0, 0.03)}
+CARDCONDUIT_URL = "https://cardconduit.com/buylist"
+# CardConduit pays at least Card Kingdom's buylist price on almost every card (sampled: p10 = 1.00x CK). Where CK
+# isn't buying, 45% of the lower US market price undershoots on most cards (median 0.79x) and rarely overshoots.
+CC_EST_SHARE = 0.45
+CARDCONDUIT_PAGE = "https://cardconduit.com/card-price-check"
 LANGS = {"en": "English", "ja": "Japanese"}
 # Scryfall promo_types that mean a stamp on the card face, and how the UI names them
 STAMPS = {"datestamped": "date", "stamped": "promo"}
@@ -67,7 +75,8 @@ DEFAULTS = {
     "buy_markup": 5.0,
     "per_card_cost": 0.75,
     "duty": 0.0,
-    "storefront": "tcgplayer",  # "tcgplayer", "manapool", "cardkingdom" (buylist), or "best"
+    "storefront": "tcgplayer",  # "tcgplayer", "manapool", "cardkingdom" / "cardconduit" (buylists), or "best"
+    "cc_service": "sorted",  # CardConduit service tier, see CC_SERVICES
     "sell_mode": "fees",  # "fees": sell after fees; "market": raw market value; "credit": store credit
     "sell_at": 95.0,
     "tcg_fee": 13.25,
@@ -83,7 +92,7 @@ DEFAULTS = {
 
 # Request params that are lists (comma-separated in URLs) or plain strings; everything else in DEFAULTS is a number.
 LIST_PARAMS = {"finishes", "sets", "rarities", "langs"}
-STR_PARAMS = {"q", "sort", "sell_mode", "storefront", "stamps"}
+STR_PARAMS = {"q", "sort", "sell_mode", "storefront", "stamps", "cc_service"}
 
 SORT_KEYS = {"profit": "profit_usd", "roi": "roi_pct", "ratio": "ratio",
              "sell": "sell_price_usd", "cm": "cardmarket_eur", "name": "name"}
@@ -285,6 +294,8 @@ def load_candidates(path, manapool=None, cardkingdom=None, cmguide=None):
             "mp_qty": mp.get("qty", 0),
             "ck": ckp,
             "ck_qty": ck.get("qty", 0),
+            "cc": cc_estimate(ckp, tcg, mpp),  # CardConduit offer: estimated until pulled (features/cardconduit.py)
+            "cc_est": True,
             "edhrec_rank": c.get("edhrec_rank"),
             "reserved": bool(c.get("reserved")),
             "image_small": small,
@@ -295,6 +306,7 @@ def load_candidates(path, manapool=None, cardkingdom=None, cmguide=None):
             "tcgplayer_url": tcgplayer_link(tcgplayer_id(c, fin), fin, c.get("lang", "en")) or uris.get("tcgplayer", ""),
             "manapool_url": mp.get("url", ""),
             "cardkingdom_url": ck.get("url", ""),
+            "cardconduit_url": CARDCONDUIT_PAGE,
             "scryfall_url": c.get("scryfall_uri", ""),
         })
 
@@ -350,10 +362,43 @@ def cardmarket_link(name, exp=None):
     return "https://www.cardmarket.com/en/Magic/Products/Search?" + urllib.parse.urlencode(q)
 
 
+def cc_estimate(ck, tcg, mp):
+    """Estimated CardConduit buylist offer (USD): Card Kingdom's offer, else a share of the lower US market price."""
+    if ck:
+        return ck
+    market = min([p for p in (tcg, mp) if p] or [0])
+    return round(market * CC_EST_SHARE, 2) if market else None
+
+
+def fetch_cardconduit(name, set_code, scryfall_id):
+    """CardConduit's current NM buylist offer for one printing, as {finish: usd}; finishes it isn't buying are absent.
+
+    Uses the same search the site's price-check page uses: card name + set, 50 rows a page."""
+    out = {}
+    for page in range(1, 6):
+        q = {"cardname": name.split(" // ")[0], "set_code": set_code.upper(), "price_gte": "", "price_lte": "",
+             "sort": "name-asc", "finish": "", "page": page}
+        req = urllib.request.Request(f"{CARDCONDUIT_URL}?{urllib.parse.urlencode(q)}", headers={**UA, "Accept": "application/json"})
+        with urllib.request.urlopen(req, timeout=30) as r:
+            data = json.load(r)
+        for d in data.get("data", []):
+            if (d.get("card") or {}).get("scryfall_uuid") == scryfall_id and d.get("condition", "nm") == "nm":
+                fin = "etched" if d.get("is_etched") else "foil" if d.get("is_foil") else "nonfoil"
+                out[fin] = float(d["amount"])
+        if page >= data.get("meta", {}).get("last_page", 1):
+            break
+    return out
+
+
 def net_sale(price, store, p):
     """What you actually end up with (USD) from one copy at `price` on `store`."""
     if store == "cardkingdom":  # `price` is already CK's cash buylist offer; no fees
         return price * (1 + p["ck_credit_bonus"] / 100) if p["sell_mode"] == "credit" else price
+    if store == "cardconduit":  # cash buylist offer minus the service tier's fee; no store-credit option
+        if p["sell_mode"] == "market":
+            return price
+        pct, per_card = CC_SERVICES.get(p["cc_service"], CC_SERVICES["sorted"])
+        return price * (1 - pct / 100) - per_card
     if p["sell_mode"] == "market":
         return price
     if p["sell_mode"] == "credit":
@@ -423,12 +468,14 @@ def score(cands, fx, params):
         if profit < p["min_profit"] or roi * 100 < p["min_roi"]:
             continue
         rows.append({
-            **{k: v for k, v in c.items() if k not in ("eur", "tcg", "mp", "ck")},
+            **{k: v for k, v in c.items() if k not in ("eur", "tcg", "mp", "ck", "cc", "cc_est")},
             "cardmarket_eur": round(eur, 2),
             "cardmarket_usd": round(eur * fx, 2),
             "tcgplayer_usd": round(c["tcg"], 2) if c["tcg"] else None,
             "manapool_usd": round(c["mp"], 2) if c["mp"] else None,
             "cardkingdom_buy_usd": round(c["ck"], 2) if c["ck"] else None,
+            "cardconduit_buy_usd": round(c["cc"], 2) if c["cc"] else None,
+            "cardconduit_estimated": c["cc_est"],
             "sold_on": store,
             "us_disagree": round(disagree, 2) if disagree else None,
             "sell_price_usd": round(price, 2),
@@ -451,7 +498,7 @@ def print_table(rows, fx, p, top):
     print(f"\nEUR->USD {fx:.4f}  duty {p['duty']}%  per-card cost ${p['per_card_cost']}  "
           f"store: {p['storefront']}  ({sell})")
     print(f"{len(rows)} opportunities found; showing top {min(top, len(rows))} by {p['sort']}\n")
-    hdr = (f"{'#':>3}  {'Card':<36} {'Set':<6} {'Fin':<7} {'CM €':>8} {'TCG $':>8} {'MP $':>8} {'CK buy':>8} "
+    hdr = (f"{'#':>3}  {'Card':<36} {'Set':<6} {'Fin':<7} {'CM €':>8} {'TCG $':>8} {'MP $':>8} {'CK buy':>8} {'CC est':>8} "
            f"{'Cost $':>8} {'Profit $':>9} {'ROI':>6}  Via")
     print(hdr)
     print("-" * len(hdr))
@@ -461,7 +508,7 @@ def print_table(rows, fx, p, top):
         name = r["name"] if len(r["name"]) + len(tag) <= 36 else r["name"][:33 - len(tag)] + "..."
         name += tag
         print(f"{i:>3}  {name:<36} {r['set']:<6} {r['finish']:<7} "
-              f"{r['cardmarket_eur']:>8.2f} {money(r['tcgplayer_usd'])} {money(r['manapool_usd'])} {money(r['cardkingdom_buy_usd'])} "
+              f"{r['cardmarket_eur']:>8.2f} {money(r['tcgplayer_usd'])} {money(r['manapool_usd'])} {money(r['cardkingdom_buy_usd'])} {money(r['cardconduit_buy_usd'])} "
               f"{r['landed_cost_usd']:>8.2f} {r['profit_usd']:>9.2f} {r['roi_pct']:>5.0f}%  {r['sold_on']}")
 
 
@@ -494,7 +541,7 @@ def main():
                    help="flat USD per card: amortized Cardmarket shipping, sleeves, your shipping to buyer")
     c.add_argument("--duty", type=float, default=d["duty"], help="import duty on the purchase price (%%)")
     s = p.add_argument_group("selling")
-    s.add_argument("--store", choices=["tcgplayer", "manapool", "cardkingdom", "best"], default=d["storefront"],
+    s.add_argument("--store", choices=[*STORES, "best"], default=d["storefront"],
                    help="where you sell (cardkingdom = their buylist); 'best' picks whichever nets more per card")
     s.add_argument("--mode", choices=["fees", "market", "credit"], default=d["sell_mode"],
                    help="fees: sell after storefront fees; market: raw market value; credit: store credit")
@@ -509,6 +556,8 @@ def main():
                    help="store credit offered as %% of US market (credit mode)")
     s.add_argument("--ck-credit-bonus", type=float, default=d["ck_credit_bonus"],
                    help="extra %% Card Kingdom pays in store credit vs cash (credit mode)")
+    s.add_argument("--cc-service", choices=list(CC_SERVICES), default=d["cc_service"],
+                   help="CardConduit service tier (fee): sorted 2%%, curated 5%%, standard 10%% + $0.03")
     o = p.add_argument_group("output")
     o.add_argument("--sort", choices=list(SORT_KEYS), default=d["sort"])
     o.add_argument("--top", type=int, default=50, help="rows to print")
@@ -532,7 +581,7 @@ def main():
         "storefront": a.store, "sell_mode": a.mode, "sell_at": a.sell_at,
         "tcg_fee": a.tcg_fee, "tcg_fixed": a.tcg_fixed,
         "mp_fee": a.mp_fee, "mp_fee_cap": a.mp_fee_cap, "mp_processing": a.mp_processing, "mp_fixed": a.mp_fixed,
-        "credit_pct": a.credit_pct, "ck_credit_bonus": a.ck_credit_bonus, "sort": a.sort,
+        "credit_pct": a.credit_pct, "ck_credit_bonus": a.ck_credit_bonus, "cc_service": a.cc_service, "sort": a.sort,
     }
     rows = score(load_candidates(path, manapool, cardkingdom, cmguide), fx, params)
     print_table(rows, fx, {**DEFAULTS, **params}, a.top)

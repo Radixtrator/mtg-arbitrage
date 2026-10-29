@@ -6,8 +6,8 @@
   const {esc, usd, eur} = M;
   const STATUSES = ["planned", "ordered", "received", "listed", "sold"];
   const CONDS = ["M", "NM", "EX", "GD", "LP", "PL", "PO"];
-  const VIA = {"": "Auto", tcgplayer: "TCGplayer", manapool: "Mana Pool", cardkingdom: "CK buylist", offer: "Buyer offer", credit: "Store credit", local: "Local / cash"};
-  const STORE_LABEL = {tcgplayer: "TCGplayer", manapool: "Mana Pool", cardkingdom: "Card Kingdom", offer: "Buyer offer"};
+  const VIA = {"": "Auto", tcgplayer: "TCGplayer", manapool: "Mana Pool", cardkingdom: "CK buylist", cardconduit: "CardConduit", offer: "Buyer offer", credit: "Store credit", local: "Local / cash"};
+  const STORE_LABEL = {tcgplayer: "TCGplayer", manapool: "Mana Pool", cardkingdom: "Card Kingdom", cardconduit: "CardConduit", offer: "Buyer offer"};
   const FIN = {nonfoil: "", foil: "foil", etched: "etched"};
 
   let items = [], cardKeys = new Set(), sel = new Set(), tab, root;
@@ -59,7 +59,8 @@
       : M.landedCost(it.status === "planned" ? cur : snap, p);
     // current price per store (falls back to the snapshot if the printing left today's data)
     const prices = {tcgplayer: it.tcg ?? it.tcgplayer_usd, manapool: it.mp ?? it.manapool_usd,
-                    cardkingdom: it.priced ? it.ck : it.cardkingdom_buy_usd};
+                    cardkingdom: it.priced ? it.ck : it.cardkingdom_buy_usd,
+                    cardconduit: it.priced ? it.cc : it.cardconduit_buy_usd};
     const via = it.sell_via || "";
     // A US buyer's offer (list checker): use the snapshotted offer and its net, not a live store price.
     if (via === "offer" || (!via && it.sold_on === "offer")) {
@@ -78,6 +79,7 @@
     let net = null, est = true;
     if (it.actual_sell_usd != null) {
       est = false;
+      // CK pays cash with no fee; CardConduit still takes its service fee (netSale handles it)
       net = via === "credit" || via === "local" || store === "cardkingdom" ? it.actual_sell_usd
         : M.netSale(it.actual_sell_usd, store || "tcgplayer", {...p, sell_mode: "fees", sell_at: 100});
     } else if (market != null) {
@@ -178,7 +180,7 @@
             TCGplayer = received + listed (in hand), Mana Pool / Moxfield = rows in the current view. Text exports are also copied to the clipboard.
             Cardmarket matches on <i>Name (Expansion)</i>; check its red "not added" list for set names that differ from Scryfall's, and set foil per want afterwards.</p>
           <p class="note" style="margin-bottom:0">Buy € = price you actually paid per copy (placeholder: Cardmarket trend when added). Sell $ = per-copy sale price;
-            fees from the sidebar are deducted unless Via is CK buylist, Buyer offer, Store credit or Local. Via Auto = the store the card was picked for in the scanner. Profit is per lot and follows the sidebar cost model.</p>
+            fees from the sidebar are deducted unless Via is CK buylist, Buyer offer, Store credit or Local (CardConduit deducts its service fee). Via Auto = the store the card was picked for in the scanner. Profit is per lot and follows the sidebar cost model.</p>
         </div>`;
       sec.querySelector("[data-r=group]").value = groupBy;
       sec.querySelector("[data-r=sort]").value = sortBy;
@@ -396,6 +398,7 @@
       ...it, rarity: it.rarity || "", reserved: false,
       cardmarket_eur: x.cur, tcgplayer_usd: it.tcg ?? it.tcgplayer_usd, manapool_usd: it.mp ?? it.manapool_usd,
       cardkingdom_buy_usd: it.priced ? it.ck : it.cardkingdom_buy_usd, ck_qty: it.ck_qty,
+      cardconduit_buy_usd: it.priced ? it.cc : it.cardconduit_buy_usd,
       mp_qty: it.mp_qty, sold_on: x.store || "tcgplayer", landed_cost_usd: x.cost, net_sale_usd: x.net ?? 0,
       profit_usd: x.profit ?? 0, roi_pct: x.roi ?? 0,
       scryfall_url: it.scryfall_url || `https://scryfall.com/card/${it.set.toLowerCase()}/${it.number}`,
@@ -425,9 +428,9 @@
     if (kind === "csv") {
       const p = M.readFilters();
       const cols = ["key", "card_key", "name", "set", "set_name", "number", "finish", "qty", "condition", "status", "order_ref",
-        "cardmarket_eur", "tcgplayer_usd", "manapool_usd", "cardkingdom_buy_usd", "sold_on", "sell_price_usd", "net_sale_usd", "actual_buy_eur", "actual_sell_usd", "sell_via",
-        "eur", "tcg", "mp", "mp_qty", "ck", "ck_qty", "notes", "created_at", "updated_at",
-        "cardmarket_url", "tcgplayer_url", "manapool_url", "cardkingdom_url"];
+        "cardmarket_eur", "tcgplayer_usd", "manapool_usd", "cardkingdom_buy_usd", "cardconduit_buy_usd", "sold_on", "sell_price_usd", "net_sale_usd", "actual_buy_eur", "actual_sell_usd", "sell_via",
+        "eur", "tcg", "mp", "mp_qty", "ck", "ck_qty", "cc", "notes", "created_at", "updated_at",
+        "cardmarket_url", "tcgplayer_url", "manapool_url", "cardkingdom_url", "cardconduit_url"];
       const extra = ["landed_cost_usd", "net_sale_usd", "profit_per_copy_usd", "profit_lot_usd"];
       const lines = [cols.concat(extra).join(",")];
       for (const i of pick(items)) {
