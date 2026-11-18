@@ -43,7 +43,7 @@
     else if (p.min_usd !== "") bits.push(`US price ≥ ${usd(p.min_usd)}`);
     if (p.sets) bits.push(`sets: ${p.sets.split(",").length}`);
     if (p.q) bits.push(`name contains “${p.q}”`);
-    if (p.buy_markup !== "") bits.push(`buy +${p.buy_markup}% over trend`);
+    if (p.buy_markup !== "") bits.push(`buy +${p.buy_markup}% over est. price`);
     return bits.map(esc).join(" · ");
   }
 
@@ -182,7 +182,7 @@
         <div class="stat"><div class="v">${Math.round(t.roi_pct)}%</div><div class="k">ROI</div></div>
         <div class="stat"><div class="v">${t.cards}</div><div class="k">Cards (${t.distinct} distinct)</div></div>
       </div>
-      <p class="note">Limited by ${esc(lim)}; ${esc(eur(t.budget_left_eur))} of the budget is left. Chosen from ${p.eligible.toLocaleString()} candidates${p.excluded ? `, skipping ${p.excluded} already in your buy list` : ""}. Spend includes your ${p.buy_markup_pct}% markup over the trend price.${esc(vsGreedy)}${esc(gap)}</p>
+      <p class="note">Limited by ${esc(lim)}; ${esc(eur(t.budget_left_eur))} of the budget is left. Chosen from ${p.eligible.toLocaleString()} candidates${p.excluded ? `, skipping ${p.excluded} already in your buy list` : ""}. Spend includes your ${p.buy_markup_pct}% markup over the estimated English NM price.${esc(vsGreedy)}${esc(gap)}</p>
       ${chart(p.curve)}
       <div class="tablewrap"><table class="t"><thead><tr>
         <th></th><th>Card</th><th>Set</th><th>Finish</th><th class="n">Qty</th><th class="n">CM €</th>

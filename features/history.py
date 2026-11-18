@@ -15,7 +15,7 @@ replaces it). Past dates can be backfilled from MTGJSON (tools/backfill_mtgjson.
        -> {"rows": [scan row + spread_now, spread_then, spread_change, cm_change_pct,
                     us_change_pct, days_tracked, days_ok, new, spark: [spread...]], "total", "new_count",
            "then_date", "dates", "window_days"}
-       spread = US price on the row's store - Cardmarket price in USD (that day's FX);
+       spread = US price on the row's store - estimated English NM Cardmarket price in USD (that day's FX);
        TCGplayer for rows sold on cardconduit (no history column).
   GET  /api/history/status   -> {"dates", "first", "last", "rows", "snapshot": {...}, "backfill": {...}}
   POST /api/history/backfill {"days": 90}  -> starts the MTGJSON backfill in the background
@@ -75,7 +75,7 @@ def _snapshot(state, cands, fx):
             db = _connect(state)
             try:
                 keys = bf.card_keys(db, [(c["id"], c["finish"]) for c in cands])
-                rows = sorted((keys[(c["id"], c["finish"])], d, c_(c["eur"]), c_(c.get("tcg")), c_(c.get("mp")),
+                rows = sorted((keys[(c["id"], c["finish"])], d, c_(c.get("cm_trend", c["eur"])), c_(c.get("tcg")), c_(c.get("mp")),
                                c.get("mp_qty"), c_(c.get("ck"))) for c in cands)
                 with db:
                     db.executemany("INSERT OR REPLACE INTO price_rows (k, d, eur, tcg, mp, mp_qty, ck) "
@@ -96,11 +96,16 @@ def _snapshot(state, cands, fx):
 
 def on_load(state):
     _path(state)
+    _premium.clear()
+    _premium.update({(c["id"], c["finish"]): c.get("cm_premium", 0) for c in state.cands if c.get("cm_premium")})
     threading.Thread(target=_snapshot, args=(state, list(state.cands), state.fx),
                      name="history-snapshot", daemon=True).start()
 
 
 # ---------------------------------------------------------------- helpers
+
+# History stores Cardmarket's raw trend; profit is figured on the English NM estimate, trend * (1 + premium).
+_premium = {}  # (scryfall id, finish) -> mtg_arb.cm_premium, only where it isn't 0
 
 def _params(query):
     """Scan params from the query dict, parsed exactly like /api/scan."""
@@ -154,11 +159,12 @@ def get_history(state, query, body):
     finally:
         db.close()
     series, ok_days = [], 0
+    pm = 1 + _premium.get((cid, finish), 0)
     for d, e, t, m, k in rows:
         date, e, t, m, k = bf.day_iso(d), *(None if v is None else v / 100 for v in (e, t, m, k))
         f = fx.get(date) or state.fx
         price = {"tcg": t, "mp": m, "ck": k}[col]
-        profit, ok = _day_profit(e, price, store, f, p)
+        profit, ok = _day_profit(e and e * pm, price, store, f, p)
         ok_days += ok
         series.append({"date": date, "eur": e, "eur_usd": _r(e * f) if e else None, "tcg": t, "mp": m, "ck": k,
                        "fx": f, "profit": profit, "ok": ok})
@@ -211,6 +217,7 @@ def get_movers(state, query, body):
         if store not in idx:  # e.g. cardconduit: no history column, so profit + spread fall back to TCGplayer
             store, us_now = "tcgplayer", r.get("tcgplayer_usd") or us_now
         i = idx[store]
+        pm = 1 + r.get("cm_premium", 0)
         spark, ok_days = [], 0
         for d in window:
             v = h.get(d)
@@ -218,19 +225,19 @@ def get_movers(state, query, body):
                 spark.append(None)
                 continue
             f = fx.get(d) or fx_now
-            spark.append(round(v[i] - v[0] * f, 2))
-            ok_days += _day_profit(v[0], v[i], store, f, p)[1]
+            spark.append(round(v[i] - v[0] * pm * f, 2))
+            ok_days += _day_profit(v[0] * pm, v[i], store, f, p)[1]
         spread_now = round(us_now - r["cardmarket_eur"] * fx_now, 2)
         spark.append(spread_now)
         then = h.get(then_date) if then_date else None
         spread_then = cm_chg = us_chg = None
         new = True
         if then and then[0]:
-            cm_chg = round((r["cardmarket_eur"] / then[0] - 1) * 100, 1)
+            cm_chg = round((r["cardmarket_trend_eur"] / then[0] - 1) * 100, 1)
             if then[i]:
-                spread_then = round(then[i] - then[0] * (fx.get(then_date) or fx_now), 2)
+                spread_then = round(then[i] - then[0] * pm * (fx.get(then_date) or fx_now), 2)
                 us_chg = round((us_now / then[i] - 1) * 100, 1)
-                new = not _day_profit(then[0], then[i], store, fx.get(then_date) or fx_now, p)[1]
+                new = not _day_profit(then[0] * pm, then[i], store, fx.get(then_date) or fx_now, p)[1]
         out.append({**r, "spread_now": spread_now, "spread_then": spread_then,
                     "spread_change": None if spread_then is None else round(spread_now - spread_then, 2),
                     "cm_change_pct": cm_chg, "us_change_pct": us_chg,

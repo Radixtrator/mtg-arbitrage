@@ -130,7 +130,7 @@ tools/backfill_mtgjson.py   price-history backfill (also runs standalone)
 To add a feature, drop a module in `features/` and a script in `ui/features/`. `app.py` loads them automatically. The contract is documented in the `app.py` docstring and the `window.MTG` comments in `index.html`.
 
 ## Caveats
-- **Reference prices:** Cardmarket "trend" is an average, not the cheapest listing. Always check the actual offers in your condition and language.
+- **Reference prices:** Cardmarket's "trend" averages sales in every language and condition, so for older cards it sits below what an English NM copy costs. The scanner prices purchases at an English NM estimate: the trend, plus 50% for 1993–94 printings, 25% for foils before 2010 and 15% for foils from 2010–2017 (`cm_premium` in `mtg_arb.py`, calibrated on a sample of 22 printings in Nov 2026). The card panel shows both numbers. It is still an estimate: thin markets can have one cheap copy and the next one 40–75% higher, and 1993–94 cards (Alpha especially) can run several times the trend. Always check the actual offers in your condition and language.
 - **Grading:** Cardmarket grades condition more strictly than US sites, which works in your favor, but compare like with like.
 - **Thin markets:** "Market" prices for rare foils and promos can come from very few sales. The disagreement filter and the Card Kingdom buylist price are good sanity checks.
 - **Card Kingdom:** its buylist offers are capped (`qty_buying`) and change daily. Card Kingdom sometimes tags a variant (raised foil, Secret Lair reprint) with the regular printing's Scryfall id. Offers whose collector number disagrees with the printing are dropped. If several offers remain, the lowest is used.

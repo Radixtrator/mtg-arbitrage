@@ -4,7 +4,8 @@ MTG price arbitrage scanner: Cardmarket (EU) -> TCGplayer / Mana Pool (US).
 
 Price sources, all keyed by Scryfall card id so matching is exact
 (same set, collector number and finish) -- no fuzzy name matching:
-  Scryfall bulk data  prices.eur / eur_foil  -> Cardmarket trend price (EUR)
+  Scryfall bulk data  prices.eur / eur_foil  -> Cardmarket trend price (EUR), raised per era and finish
+                                                to an English NM estimate (see cm_premium)
                       prices.usd / usd_foil  -> TCGplayer market price (USD)
   Mana Pool           /api/v1/prices/singles -> Mana Pool market price (USD)
   Card Kingdom        /api/v2/pricelist      -> Card Kingdom cash buylist offer (USD)
@@ -199,6 +200,22 @@ def ck_offer(offers, fin, number):
     return min(ok, key=lambda o: o["price"]) if ok else None
 
 
+def cm_premium(released, fin):
+    """How much more than Cardmarket's trend an English NM copy costs, as a fraction (0.25 = +25%).
+
+    The trend averages sales in every language and condition. Checked against the cheapest English NM
+    listings of 22 printings (Nov 2026): about equal to trend for nonfoils from 1995 on and for foils from
+    2018 on, 0-35% above it for older foils (the next copies up 40-75% above), and 30-285% above it for
+    1993-94 printings, where most copies on offer are played."""
+    if released < "1995":
+        return 0.5
+    if fin != "nonfoil" and released < "2010":
+        return 0.25
+    if fin != "nonfoil" and released < "2018":
+        return 0.15
+    return 0.0
+
+
 def get_cardmarket_guide(refresh=False):
     """Cardmarket's own daily downloads (cached per UTC day) as {idProduct: {finish: trend EUR, "exp": idExpansion}}.
 
@@ -275,6 +292,7 @@ def load_candidates(path, manapool=None, cardkingdom=None, cmguide=None):
             return
         uris = c.get("purchase_uris") or {}
         small, normal = card_images(c)
+        prem = cm_premium(c.get("released_at", ""), fin)
         out.append({
             "id": c["id"],
             "name": c["name"],
@@ -286,7 +304,9 @@ def load_candidates(path, manapool=None, cardkingdom=None, cmguide=None):
             "stamp": next((STAMPS[t] for t in STAMPS if t in (c.get("promo_types") or [])), ""),
             "rarity": c.get("rarity", ""),
             "released_at": c.get("released_at", ""),
-            "eur": eur,
+            "eur": eur * (1 + prem),  # estimated English NM price: what buying costs
+            "cm_trend": eur,  # Cardmarket's own trend, all languages and conditions
+            "cm_premium": prem,
             "tcg": tcg,
             # TCGplayer market for every finish of this printing, so the UI can warn about foil/non-foil mix-ups
             "tcg_finishes": {f: float(v) for f, (_, k) in FINISHES.items() if (v := (c.get("prices") or {}).get(k))},
@@ -468,8 +488,9 @@ def score(cands, fx, params):
         if profit < p["min_profit"] or roi * 100 < p["min_roi"]:
             continue
         rows.append({
-            **{k: v for k, v in c.items() if k not in ("eur", "tcg", "mp", "ck", "cc", "cc_est")},
+            **{k: v for k, v in c.items() if k not in ("eur", "cm_trend", "tcg", "mp", "ck", "cc", "cc_est")},
             "cardmarket_eur": round(eur, 2),
+            "cardmarket_trend_eur": round(c["cm_trend"], 2),
             "cardmarket_usd": round(eur * fx, 2),
             "tcgplayer_usd": round(c["tcg"], 2) if c["tcg"] else None,
             "manapool_usd": round(c["mp"], 2) if c["mp"] else None,
@@ -536,7 +557,7 @@ def main():
     c = p.add_argument_group("cost model")
     c.add_argument("--fx", type=float, help="EUR->USD rate (default: live ECB rate via frankfurter.dev)")
     c.add_argument("--buy-markup", type=float, default=d["buy_markup"],
-                   help="%% paid above Cardmarket trend (trend is an average; cheapest NM copies may differ)")
+                   help="%% paid above the estimated English NM price (Cardmarket trend + cm_premium)")
     c.add_argument("--per-card-cost", type=float, default=d["per_card_cost"],
                    help="flat USD per card: amortized Cardmarket shipping, sleeves, your shipping to buyer")
     c.add_argument("--duty", type=float, default=d["duty"], help="import duty on the purchase price (%%)")

@@ -249,7 +249,7 @@ td img.thumb { width: 34px; border-radius: 3px; vertical-align: middle; }
       <summary>Buying costs</summary>
       <div class="row2">
         <label class="f">EUR → USD<input type="number" id="fx" step="0.001"></label>
-        <label class="f">Buy above trend %<input type="number" id="buy_markup" step="1"></label>
+        <label class="f" title="Paid above the estimated English NM price (Cardmarket trend, raised for older cards and foils)">Buy above est. price %<input type="number" id="buy_markup" step="1"></label>
         <label class="f">Per-card cost $<input type="number" id="per_card_cost" step="0.05"></label>
         <label class="f">Import duty %<input type="number" id="duty" step="1"></label>
       </div>
@@ -566,14 +566,14 @@ function render() {
   } else {
     el.innerHTML = `<div class="tablewrap"><table class="t"><thead><tr>
       ${cardActions.length ? "<th></th>" : ""}<th></th><th data-sort="name">Card</th><th>Set</th><th>Finish</th>
-      <th class="n" data-sort="cm">CM €</th><th class="n">TCG $</th><th class="n">MP $</th><th class="n" title="Card Kingdom buylist, cash">CK buy $</th><th class="n" title="CardConduit buylist, NM, before service fee (~ = estimate)">CC buy $</th><th>Via</th>
+      <th class="n" data-sort="cm" title="Estimated English NM price on Cardmarket: the trend, raised for older cards and foils">CM €</th><th class="n">TCG $</th><th class="n">MP $</th><th class="n" title="Card Kingdom buylist, cash">CK buy $</th><th class="n" title="CardConduit buylist, NM, before service fee (~ = estimate)">CC buy $</th><th>Via</th>
       <th class="n" data-sort="ratio">Ratio</th><th class="n">Cost $</th><th class="n">Net $</th><th class="n" data-sort="profit">Profit $</th><th class="n" data-sort="roi">ROI</th>
       <th class="n" title="Mana Pool listings">MP qty</th><th class="n" title="EDHREC rank">EDHREC</th>
       </tr></thead><tbody>${rows.map((r, i) => `<tr data-i="${i}">
         ${cardActions.length ? `<td><div style="display:flex;gap:3px">${actionButtons(r, i).replaceAll('class="act', 'class="btn sm act-t')}</div></td>` : ""}
         <td>${r.image_small ? `<img class="thumb" loading="lazy" src="${esc(r.image_small)}" data-big="${esc(r.image_normal)}" alt="">` : ""}</td>
         <td>${esc(r.name)}${r.finish !== "nonfoil" ? " ✦" : ""}${r.lang === "ja" ? ` <span class="muted">JP</span>` : ""}${r.stamp ? ` <span class="muted" title="${STAMP_LABEL[r.stamp]}">stamped</span>` : ""}</td><td title="${esc(r.set_name)}">${esc(r.set)} #${esc(r.number)}</td><td>${r.finish}</td>
-        <td class="n">${eur(r.cardmarket_eur)}</td><td class="n">${usd(r.tcgplayer_usd)}</td><td class="n">${usd(r.manapool_usd)}</td><td class="n">${usd(r.cardkingdom_buy_usd)}</td><td class="n">${r.cardconduit_estimated && r.cardconduit_buy_usd != null ? "~" : ""}${usd(r.cardconduit_buy_usd)}</td>
+        <td class="n" title="${r.cm_premium ? `Trend ${eur(r.cardmarket_trend_eur)} +${Math.round(r.cm_premium * 100)}% for English NM` : "Cardmarket trend"}">${eur(r.cardmarket_eur)}</td><td class="n">${usd(r.tcgplayer_usd)}</td><td class="n">${usd(r.manapool_usd)}</td><td class="n">${usd(r.cardkingdom_buy_usd)}</td><td class="n">${r.cardconduit_estimated && r.cardconduit_buy_usd != null ? "~" : ""}${usd(r.cardconduit_buy_usd)}</td>
         <td>${STORE_LABEL[r.sold_on]}${r.us_disagree > 1.5 ? ` <span class="warn" title="TCGplayer and Mana Pool disagree by ${r.us_disagree}×">⚠</span>` : ""}</td>
         <td class="n">${r.ratio.toFixed(2)}×</td><td class="n">${usd(r.landed_cost_usd)}</td><td class="n">${usd(r.net_sale_usd)}</td>
         <td class="n pos">${usd(r.profit_usd)}</td><td class="n">${Math.round(r.roi_pct)}%</td>
@@ -613,7 +613,8 @@ async function openDrawer(r) {
       ${r.image_normal ? `<img src="${esc(r.image_normal)}" alt="${esc(r.name)}">` : ""}</div>
     <div class="kv">
       <span class="h"></span><span class="h">Daily data</span><span class="h">Live (Scryfall)</span>
-      <span class="cm">Cardmarket trend</span><span>${eur(r.cardmarket_eur)}</span><span id="liveEur">…</span>
+      <span class="cm">Cardmarket trend</span><span>${eur(r.cardmarket_trend_eur ?? r.cardmarket_eur)}</span><span id="liveEur">…</span>
+      ${r.cm_premium ? `<span class="cm" title="The trend averages every language and condition; English NM copies of older cards and foils cost more">Est. English NM</span><span>${eur(r.cardmarket_eur)}</span><span class="muted">trend +${Math.round(r.cm_premium * 100)}%</span>` : ""}
       <span class="tcg">TCGplayer market</span><span>${usd(r.tcgplayer_usd)}</span><span id="liveUsd">…</span>
       <span class="mp">Mana Pool market</span><span>${usd(r.manapool_usd)}</span><span class="muted">${r.mp_qty ? r.mp_qty + " listed" : ""}</span>
       <span class="ck">Card Kingdom buylist</span><span>${usd(r.cardkingdom_buy_usd)}</span><span class="muted">${r.ck_qty ? "buying " + r.ck_qty : ""}</span>
@@ -652,11 +653,11 @@ async function openDrawer(r) {
     const c = await scryfall(`https://api.scryfall.com/cards/${r.id}`);
     const fk = {nonfoil: ["eur", "usd"], foil: ["eur_foil", "usd_foil"], etched: ["eur_etched", "usd_etched"]}[r.finish];
     const le = parseFloat(c.prices?.[fk[0]]), lu = parseFloat(c.prices?.[fk[1]]);
-    $("#liveEur").innerHTML = isNaN(le) ? "–" : diff(eur(le), le, r.cardmarket_eur, true);
+    $("#liveEur").innerHTML = isNaN(le) ? "–" : diff(eur(le), le, r.cardmarket_trend_eur ?? r.cardmarket_eur, true);
     $("#liveUsd").innerHTML = isNaN(lu) ? "–" : diff(usd(lu), lu, r.tcgplayer_usd, false);
     if (!isNaN(le)) {
       const price = r.sold_on === "tcgplayer" ? (isNaN(lu) ? r.tcgplayer_usd : lu) : r.sold_on === "manapool" ? r.manapool_usd : r.sold_on === "cardconduit" ? r.cardconduit_buy_usd : r.cardkingdom_buy_usd;
-      const landed = MTG.landedCost(le);
+      const landed = MTG.landedCost(le * (1 + (r.cm_premium || 0)));
       const pr = (r.sold_on === "offer" ? r.net_sale_usd : MTG.netSale(price, r.sold_on)) - landed;
       $("#liveProfit").innerHTML = `<b class="${pr >= 0 ? "pos" : "neg"}">${usd(pr)} (${Math.round(pr / landed * 100)}%)</b>`;
     }
